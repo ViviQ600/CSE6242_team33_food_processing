@@ -1,0 +1,27 @@
+# Project Configuration File
+# CSE 6242 Team 33 - Food Processing Analysis
+
+data:
+  raw_dir: data/raw
+  processed_dir: data/processed
+  file_format: csv
+
+analysis:
+  pca_components: 2
+  test_size: 0.2
+  random_state: 42
+
+visualization:
+  dpi: 300
+  style: whitegrid
+  palette: husl
+  figure_size: [12, 6]
+
+output:
+  figures_dir: results/figures
+  tables_dir: results/tables
+  models_dir: results/models
+
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
