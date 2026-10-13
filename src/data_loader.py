@@ -16,17 +16,17 @@ os.makedirs(PROCESSED_DIR, exist_ok=True)
 DATA_URL = "https://static.openfoodfacts.org/data/en.openfoodfacts.org.products.csv.gz"
 RAW_FILE_PATH = os.path.join(RAW_DIR, "en.openfoodfacts.org.products.csv.gz")
 
-# Filter: Last 3 years
-data_years = 3
-current_timestamp = int(time.time())
-years_sec = 365 * 24 * 3600
-cutoff_timestamp = current_timestamp - (data_years * years_sec)
+# Filter: Fixed window from July 2024 to June 2026
+# 2024-07-01 00:00:00 UTC = 1719792000
+# 2026-06-30 23:59:59 UTC = 1782863999
+START_TIMESTAMP = 1719792000
+END_TIMESTAMP = 1782863999
 
 PROCESSED_FILE_PATH = os.path.join(
-    PROCESSED_DIR, f"us_openfoodfacts_nutri_nova_last_{data_years}years.csv"
+    PROCESSED_DIR, "us_openfoodfacts_nutri_nova_202407_202606.csv"
 )
 UNLABELED_FILE_PATH = os.path.join(
-    PROCESSED_DIR, f"us_openfoodfacts_unlabeled_last_{data_years}years.csv"
+    PROCESSED_DIR, "us_openfoodfacts_unlabeled_202407_202606.csv"
 )
 SAMPLE_FILE_PATH = os.path.join(
     PROCESSED_DIR, "sample_5000_us_food.csv"
@@ -36,7 +36,7 @@ SAMPLE_FILE_PATH = os.path.join(
 sample_limit = None
 
 # Required features for multi-target classification & reformulation sandbox
-key_cols = [
+ESSENTIAL_COLS = [
     # Metadata & Identifiers
     "code",
     "product_name",
@@ -44,19 +44,27 @@ key_cols = [
     "countries_en",
     "created_t",
     "last_modified_t",
-    # Target Labels for Multi-target Modeling
+    # Food Categories for Sandbox & Visual Filtering
+    "categories_en",
+    "pnns_groups_1",
+    "pnns_groups_2",
+    # Target Labels for Multi-target Modeling (Primary: NOVA; Secondary: Nutri-Score)
+    "nova_group",
     "nutriscore_grade",
     "nutriscore_score",
-    "nova_group",
-    # Text & Additives Features (NLP extraction)
+    # Text & Additives Features (NLP extraction for UPF classification)
     "ingredients_text",
     "additives_n",
     "additives_tags",
-    # Continuous Nutritional Attributes (per 100g)
+    "additives_en",
+    # Continuous Nutritional Attributes (per 100g for ML & What-If sliders)
     "energy_100g",
+    "energy-kcal_100g",
     "fat_100g",
     "saturated-fat_100g",
+    "trans-fat_100g",
     "sugars_100g",
+    "added-sugars_100g",
     "fiber_100g",
     "proteins_100g",
     "sodium_100g",
@@ -102,7 +110,7 @@ else:
 # 3. Processing data
 # ==============================================================================
 print(
-    f"\nFiltering US products modified within the last {data_years} years..."
+    f"\nFiltering US products modified between 2024-07 and 2026-06..."
 )
 
 numeric_fields = [
@@ -110,9 +118,12 @@ numeric_fields = [
     "nova_group",
     "additives_n",
     "energy_100g",
+    "energy-kcal_100g",
     "fat_100g",
     "saturated-fat_100g",
+    "trans-fat_100g",
     "sugars_100g",
+    "added-sugars_100g",
     "fiber_100g",
     "proteins_100g",
     "sodium_100g",
@@ -126,7 +137,7 @@ unlabeled_records = 0
 for chunk in pd.read_csv(
     RAW_FILE_PATH,
     sep="\t",
-    usecols=key_cols,
+    usecols=ESSENTIAL_COLS,
     compression="gzip",
     chunksize=50000,
     low_memory=False,
@@ -136,11 +147,11 @@ for chunk in pd.read_csv(
     # Filter 1: US marketed products
     is_us = chunk["countries_en"].fillna("").str.contains(us_label)
 
-    # Filter 2: Modified within the last 3 years
+    # Filter 2: Modified between July 2024 and June 2026
     mod_ts = pd.to_numeric(chunk["last_modified_t"], errors="coerce").fillna(0)
-    is_recent = mod_ts >= cutoff_timestamp
+    in_time_window = (mod_ts >= START_TIMESTAMP) & (mod_ts <= END_TIMESTAMP)
 
-    base_filter = is_us & is_recent
+    base_filter = is_us & in_time_window
     if not base_filter.any():
         continue
 
@@ -209,15 +220,15 @@ df_processed = pd.read_csv(PROCESSED_FILE_PATH, low_memory=False)
 # 4. Print data summary
 # ==============================================================================
 print("\n" + "=" * 70)
-print(f"DATASET SUMMARY REPORT (US - LAST {data_years} YEARS)")
+print(f"DATASET SUMMARY REPORT (US: 2024-07 to 2026-06)")
 print("=" * 70)
 print(f"Raw archive:              {RAW_FILE_PATH}")
-print(f"Processed items:         {PROCESSED_FILE_PATH}")
-print(f"Unlabeled items:         {UNLABELED_FILE_PATH}")
+print(f"Processed target:         {PROCESSED_FILE_PATH}")
+print(f"Unlabeled target:         {UNLABELED_FILE_PATH}")
 print(f"Total Labeled Records:    {len(df_processed):,}")
 print(f"Total Unlabeled Records:  {unlabeled_records:,}")
 print(
-    f"Cutoff Date:              >= {time.strftime('%Y-%m-%d', time.gmtime(cutoff_timestamp))} (UTC)"
+    f"Time Window:              {time.strftime('%Y-%m-%d', time.gmtime(START_TIMESTAMP))} to {time.strftime('%Y-%m-%d', time.gmtime(END_TIMESTAMP))} (UTC)"
 )
 
 print("\n--- 1. Nutri-Score Distribution (nutriscore_grade) ---")
@@ -277,12 +288,18 @@ print(coverage.loc[[c for c in key_cols if c in coverage.index]])
 
 print("\n--- 5. Key Nutritional Attributes Stats (per 100g) ---")
 nutri_cols = [
-    "energy_100g",
-    "fat_100g",
-    "saturated-fat_100g",
-    "sugars_100g",
-    "proteins_100g",
-    "sodium_100g",
+    c for c in [
+        "energy_100g",
+        "energy-kcal_100g",
+        "fat_100g",
+        "saturated-fat_100g",
+        "trans-fat_100g",
+        "sugars_100g",
+        "added-sugars_100g",
+        "fiber_100g",
+        "proteins_100g",
+        "sodium_100g",
+    ] if c in df_processed.columns
 ]
 print(
     df_processed[nutri_cols]
