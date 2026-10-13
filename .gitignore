@@ -1,47 +1,14 @@
-# Byte-compiled / optimized / DLL files
+# ==============================================================================
+# Python & Bytecode Artifacts
+# ==============================================================================
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
 *.so
 
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-pip-wheel-metadata/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-PIPFILE.lock
-
-# PyInstaller
-*.manifest
-*.spec
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-
-# pyenv
-.python-version
-
-# Environments
+# ==============================================================================
+# Virtual Environments & Packaging
+# ==============================================================================
 .env
 .venv
 env/
@@ -49,30 +16,46 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+build/
+dist/
+*.egg-info/
+*.egg
 
-# IDE
+# ==============================================================================
+# Jupyter Notebook & IDE Settings
+# ==============================================================================
+.ipynb_checkpoints
+profile_default/
+ipython_config.py
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 .DS_Store
+Thumbs.db
 
-# Data and results
+# ==============================================================================
+# Data Directories (Exclude Massive Raw/Full Files, Track Gitkeep & Sample)
+# ==============================================================================
+# Ignore raw data archives (GB scale)
 data/raw/*
 !data/raw/.gitkeep
+
+# Ignore full-scale processed datasets (over 50-100 MB limits)
 data/processed/*
 !data/processed/.gitkeep
+
+# Whitelist small test sample for collaborative dev on GitHub
+!data/processed/*sample*
+
+# ==============================================================================
+# Results, Visuals & Large Model Binaries
+# ==============================================================================
 results/figures/*
 !results/figures/.gitkeep
 results/tables/*
 !results/tables/.gitkeep
 results/models/*
 !results/models/.gitkeep
-
-# Logs
 *.log
-
-# OS
-.DS_Store
-Thumbs.db

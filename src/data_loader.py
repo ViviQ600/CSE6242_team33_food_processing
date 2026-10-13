@@ -28,12 +28,15 @@ PROCESSED_FILE_PATH = os.path.join(
 UNLABELED_FILE_PATH = os.path.join(
     PROCESSED_DIR, f"us_openfoodfacts_unlabeled_last_{data_years}years.csv"
 )
+SAMPLE_FILE_PATH = os.path.join(
+    PROCESSED_DIR, "sample_5000_us_food.csv"
+)
 
 # Target sample size for data processing (Set to None for full dataset extraction)
 sample_limit = None
 
 # Required features for multi-target classification & reformulation sandbox
-ESSENTIAL_COLS = [
+key_cols = [
     # Metadata & Identifiers
     "code",
     "product_name",
@@ -64,9 +67,16 @@ us_label = re.compile(r"(?i)\b(?:united states|usa|us|america)\b")
 # ==============================================================================
 # 2. Raw data
 # ==============================================================================
-# Check alternative local path in root if not in data/raw/
-if not os.path.exists(RAW_FILE_PATH) and os.path.exists("openfoodfacts_dump.csv.gz"):
-    RAW_FILE_PATH = "openfoodfacts_dump.csv.gz"
+# Detect potential local copies to avoid re-downloading
+if not os.path.exists(RAW_FILE_PATH):
+    fallback_locations = [
+        "openfoodfacts_dump.csv.gz",
+        os.path.join("..", "CSE6242", "openfoodfacts_dump.csv.gz"),
+    ]
+    for loc in fallback_locations:
+        if os.path.exists(loc):
+            RAW_FILE_PATH = loc
+            break
 
 if not os.path.exists(RAW_FILE_PATH):
     print(f"Downloading raw dataset archive to: {RAW_FILE_PATH} ...")
@@ -116,7 +126,7 @@ unlabeled_records = 0
 for chunk in pd.read_csv(
     RAW_FILE_PATH,
     sep="\t",
-    usecols=ESSENTIAL_COLS,
+    usecols=key_cols,
     compression="gzip",
     chunksize=50000,
     low_memory=False,
@@ -136,7 +146,7 @@ for chunk in pd.read_csv(
 
     chunk_base = chunk[base_filter].copy()
 
-    # Filter 3: Contains at least Nutri-Score or NOVA label (excluding unknown)
+    # Filter 3: Contains at least Nutri-Score or NOVA label
     valid_nutri = chunk_base["nutriscore_grade"].notna() & (
         ~chunk_base["nutriscore_grade"].str.lower().str.strip().isin(["unknown", "not-applicable", ""])
     )
@@ -144,20 +154,20 @@ for chunk in pd.read_csv(
     has_labels = valid_nutri | valid_nova
 
     subset = chunk_base[has_labels]
-    # Unlabeled pool: Neither label is present, but has ingredients or energy for feature extraction
+    # Unlabeled pool: No target labels, but retains ingredients or nutrients for inference
     subset_unlabeled = chunk_base[
         (~has_labels)
         & (chunk_base["ingredients_text"].notna() | chunk_base["energy_100g"].notna())
     ]
 
-    # Convert continuous metrics and group labels to numeric types
+    # Convert numeric fields
     for col in numeric_fields:
         if col in subset.columns:
             subset.loc[:, col] = pd.to_numeric(subset[col], errors="coerce")
         if col in subset_unlabeled.columns:
             subset_unlabeled.loc[:, col] = pd.to_numeric(subset_unlabeled[col], errors="coerce")
 
-    # Stream write processed labeled data directly to disk (Append mode)
+    # Stream write labeled processed dataset
     if not subset.empty:
         subset.to_csv(
             PROCESSED_FILE_PATH,
@@ -168,7 +178,7 @@ for chunk in pd.read_csv(
         first_chunk_proc = False
         total_records += len(subset)
 
-    # Stream write unlabeled data for future inference
+    # Stream write unlabeled dataset
     if not subset_unlabeled.empty:
         subset_unlabeled.to_csv(
             UNLABELED_FILE_PATH,
@@ -184,10 +194,15 @@ for chunk in pd.read_csv(
     if sample_limit and total_records >= sample_limit:
         break
 
-print(f"\nProcessed data saved to: '{PROCESSED_FILE_PATH}'")
-print(f"Unlabeled data saved to: '{UNLABELED_FILE_PATH}'")
+print(f"\nProcessed labeled data saved to: '{PROCESSED_FILE_PATH}'")
+print(f"Unlabeled inference data saved to: '{UNLABELED_FILE_PATH}'")
 
-# Load saved processed data for summary generation
+# Generate small test sample for GitHub version control (first 5,000 records)
+df_sample = pd.read_csv(PROCESSED_FILE_PATH, nrows=5000, low_memory=False)
+df_sample.to_csv(SAMPLE_FILE_PATH, index=False)
+print(f"Small repo sample saved to: '{SAMPLE_FILE_PATH}'")
+
+# Load processed dataset for summary generation
 df_processed = pd.read_csv(PROCESSED_FILE_PATH, low_memory=False)
 
 # ==============================================================================
@@ -197,8 +212,8 @@ print("\n" + "=" * 70)
 print(f"DATASET SUMMARY REPORT (US - LAST {data_years} YEARS)")
 print("=" * 70)
 print(f"Raw archive:              {RAW_FILE_PATH}")
-print(f"Processed target:         {PROCESSED_FILE_PATH}")
-print(f"Unlabeled target:         {UNLABELED_FILE_PATH}")
+print(f"Processed items:         {PROCESSED_FILE_PATH}")
+print(f"Unlabeled items:         {UNLABELED_FILE_PATH}")
 print(f"Total Labeled Records:    {len(df_processed):,}")
 print(f"Total Unlabeled Records:  {unlabeled_records:,}")
 print(
