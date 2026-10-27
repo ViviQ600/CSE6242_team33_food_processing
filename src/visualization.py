@@ -138,10 +138,13 @@ df["is_healthy_benchmark"] = np.where(
     "No",
 )
 
+# Avoid Null displaying on tooltips if product_name is empty
+df["product_name"] = df["product_name"].fillna("Product " + df["code"].astype(str))
+
 # ==============================================================================
-# 7. Column Selection & Lightweight Export for Tableau (<1MB, Git Tracked)
+# 7. Column Selection & High-Quality Export (<1MB, Git Tracked, Zero Nulls)
 # ==============================================================================
-# Drop long text fields (ingredients_text, etc.) to keep file lightweight
+# Keep all exact column names intact to protect Tableau Calculated Fields
 TABLEAU_EXPORT_COLS = [
     "code",
     "product_name",
@@ -168,8 +171,17 @@ TABLEAU_EXPORT_COLS = [
     "is_healthy_benchmark",
 ]
 
-# Keep 2,500 representative records for snappy rendering and zero git bloat
-df_tableau = df[TABLEAU_EXPORT_COLS].head(2500)
+# Filter rows that have valid, non-null values for both sugars and sodium
+valid_nutrient_mask = df["sugars_100g"].notna() & df["sodium_100g"].notna()
+df_valid = df[valid_nutrient_mask]
+
+# If valid rows exceed 2,500, take 2,500 rows; otherwise take all valid ones
+target_rows = 2500
+if len(df_valid) >= target_rows:
+    df_tableau = df_valid[TABLEAU_EXPORT_COLS].head(target_rows)
+else:
+    df_tableau = df[TABLEAU_EXPORT_COLS].head(target_rows)
+
 df_tableau.to_csv(output_path, index=False)
 
 # ==============================================================================
@@ -178,8 +190,6 @@ df_tableau.to_csv(output_path, index=False)
 file_size_kb = os.path.getsize(output_path) / 1024
 print("=" * 70)
 print(f"Tableau Mock Data generated successfully: {output_path}")
-print(
-    f"File size: {file_size_kb:.1f} KB (Well below Git limits & safe from .gitignore)"
-)
-print(f"Total rows: {len(df_tableau):,} | Columns: {len(TABLEAU_EXPORT_COLS)}")
+print(f"File size: {file_size_kb:.1f} KB (Safe from .gitignore & fast in Tableau)")
+print(f"Total rows: {len(df_tableau):,} | Valid Nutrient Points: {df_tableau['sugars_100g'].notna().sum():,}")
 print("=" * 70)
