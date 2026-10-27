@@ -32,11 +32,25 @@ ingredients_text = df["ingredients_text"].fillna("").astype(str)
 # ==============================================================================
 # 3. NLP Extraction of Chemical Additives (E-numbers / UPF Biomarkers)
 # ==============================================================================
+
 emulsifier_regex = re.compile(
-    r"(?i)\b(e471|e472|emulsifi|lecithin|polysorbate|mono- and diglycerides)\b"
+    r"(?i)\b(e471|e472|emulsifi|lecithin|polysorbate|mono- and diglycerides|carrageenan|xanthan gum|guar gum)\b"
 )
+
 sweetener_regex = re.compile(
-    r"(?i)\b(aspartame|sucralose|acesulfame|saccharin|stevia|maltodextrin)\b"
+    r"(?i)\b(aspartame|sucralose|acesulfame|saccharin|stevia|maltodextrin|cyclamate)\b"
+)
+
+preservative_regex = re.compile(
+    r"(?i)\b(e200|e202|e211|e250|sodium benzoate|potassium sorbate|sodium nitrite|calcium propionate)\b"
+)
+
+color_regex = re.compile(
+    r"(?i)\b(e102|e110|e129|e133|e150d|caramel color|tartrazine|allura red|sunset yellow|brilliant blue)\b"
+)
+
+flavor_enhancer_regex = re.compile(
+    r"(?i)\b(e621|monosodium glutamate|msg|yeast extract|disodium inosinate|disodium guanylate)\b"
 )
 
 df["has_emulsifier"] = ingredients_text.apply(
@@ -44,6 +58,15 @@ df["has_emulsifier"] = ingredients_text.apply(
 )
 df["has_sweetener"] = ingredients_text.apply(
     lambda x: 1 if sweetener_regex.search(x) else 0
+)
+df["has_preservative"] = ingredients_text.apply(
+    lambda x: 1 if preservative_regex.search(x) else 0
+)
+df["has_artificial_color"] = ingredients_text.apply(
+    lambda x: 1 if color_regex.search(x) else 0
+)
+df["has_flavor_enhancer"] = ingredients_text.apply(
+    lambda x: 1 if flavor_enhancer_regex.search(x) else 0
 )
 
 # ==============================================================================
@@ -169,6 +192,9 @@ TABLEAU_EXPORT_COLS = [
     "nutri_sugar_penalty_pts",
     "nutri_sodium_penalty_pts",
     "is_healthy_benchmark",
+    "has_preservative",
+    "has_artificial_color",
+    "has_flavor_enhancer",
 ]
 
 # Filter rows that have valid, non-null values for both sugars and sodium
