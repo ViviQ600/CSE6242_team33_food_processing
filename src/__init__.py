@@ -1,11 +1,7 @@
-"""CSE 6242 Team 33 Food Processing Analysis Package"""
+"""Team 33 food-processing analysis package.
 
-__version__ = "0.1.0"
-__author__ = "Team 33"
+Modules are imported explicitly by the notebook. Package import has no dataset,
+training, download, plot, or export side effects.
+"""
 
-from . import data_processing
-from . import analysis
-from . import visualization
-from . import utils
-
-__all__ = ["data_processing", "analysis", "visualization", "utils"]
+__version__ = "3.0.0"

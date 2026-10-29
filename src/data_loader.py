@@ -1,291 +1,142 @@
+"""Chunked Open Food Facts loading with a source-verified all-column cache."""
+
 import gzip
-import os
-import re
+import json
 import time
-import urllib.request
+from functools import partial
 import pandas as pd
+from IPython.display import display, Markdown
+from .utils import PipelineConfig, WorkflowState, save_table
+from .visualization import show_figure
 
-# Save to repo directories
-RAW_DIR = os.path.join("data", "raw")
-PROCESSED_DIR = os.path.join("data", "processed")
 
-os.makedirs(RAW_DIR, exist_ok=True)
-os.makedirs(PROCESSED_DIR, exist_ok=True)
+def load_data(config: PipelineConfig) -> WorkflowState:
+    """Extract the exact U.S. market/date cohort while retaining all raw columns.
 
-# File paths
-DATA_URL = "https://static.openfoodfacts.org/data/en.openfoodfacts.org.products.csv.gz"
-RAW_FILE_PATH = os.path.join(RAW_DIR, "en.openfoodfacts.org.products.csv.gz")
-
-# Filter: Last 3 years
-data_years = 3
-current_timestamp = int(time.time())
-years_sec = 365 * 24 * 3600
-cutoff_timestamp = current_timestamp - (data_years * years_sec)
-
-PROCESSED_FILE_PATH = os.path.join(
-    PROCESSED_DIR, f"us_openfoodfacts_nutri_nova_last_{data_years}years.csv"
-)
-UNLABELED_FILE_PATH = os.path.join(
-    PROCESSED_DIR, f"us_openfoodfacts_unlabeled_last_{data_years}years.csv"
-)
-SAMPLE_FILE_PATH = os.path.join(
-    PROCESSED_DIR, "sample_5000_us_food.csv"
-)
-
-# Target sample size for data processing (Set to None for full dataset extraction)
-sample_limit = None
-
-# Required features for multi-target classification & reformulation sandbox
-key_cols = [
-    # Metadata & Identifiers
-    "code",
-    "product_name",
-    "url",
-    "countries_en",
-    "created_t",
-    "last_modified_t",
-    # Target Labels for Multi-target Modeling
-    "nutriscore_grade",
-    "nutriscore_score",
-    "nova_group",
-    # Text & Additives Features (NLP extraction)
-    "ingredients_text",
-    "additives_n",
-    "additives_tags",
-    # Continuous Nutritional Attributes (per 100g)
-    "energy_100g",
-    "fat_100g",
-    "saturated-fat_100g",
-    "sugars_100g",
-    "fiber_100g",
-    "proteins_100g",
-    "sodium_100g",
-]
-
-us_label = re.compile(r"(?i)\b(?:united states|usa|us|america)\b")
-
-# ==============================================================================
-# 2. Raw data
-# ==============================================================================
-# Detect potential local copies to avoid re-downloading
-if not os.path.exists(RAW_FILE_PATH):
-    fallback_locations = [
-        "openfoodfacts_dump.csv.gz",
-        os.path.join("..", "CSE6242", "openfoodfacts_dump.csv.gz"),
-    ]
-    for loc in fallback_locations:
-        if os.path.exists(loc):
-            RAW_FILE_PATH = loc
-            break
-
-if not os.path.exists(RAW_FILE_PATH):
-    print(f"Downloading raw dataset archive to: {RAW_FILE_PATH} ...")
-    headers = {"User-Agent": "OMSA_CSE6242_Project - Python/3.10"}
-    req = urllib.request.Request(DATA_URL, headers=headers)
-    with urllib.request.urlopen(req) as resp, open(
-        RAW_FILE_PATH, "wb"
-    ) as out_f:
-        buf_size = 16 * 1024 * 1024  # 16 MB chunk size
-        downloaded = 0
-        while True:
-            chunk = resp.read(buf_size)
-            if not chunk:
-                break
-            out_f.write(chunk)
-            downloaded += len(chunk)
-            print(f"Downloaded: {downloaded / (1024 * 1024):.1f} MB...", end="\r")
-    print(f"\nRaw archive saved successfully at '{RAW_FILE_PATH}'.")
-else:
-    print(f"Found existing raw dataset archive at '{RAW_FILE_PATH}'.")
-
-# ==============================================================================
-# 3. Processing data
-# ==============================================================================
-print(
-    f"\nFiltering US products modified within the last {data_years} years..."
-)
-
-numeric_fields = [
-    "nutriscore_score",
-    "nova_group",
-    "additives_n",
-    "energy_100g",
-    "fat_100g",
-    "saturated-fat_100g",
-    "sugars_100g",
-    "fiber_100g",
-    "proteins_100g",
-    "sodium_100g",
-]
-
-first_chunk_proc = True
-first_chunk_unlab = True
-total_records = 0
-unlabeled_records = 0
-
-for chunk in pd.read_csv(
-    RAW_FILE_PATH,
-    sep="\t",
-    usecols=key_cols,
-    compression="gzip",
-    chunksize=50000,
-    low_memory=False,
-    on_bad_lines="skip",
-    dtype=str,
-):
-    # Filter 1: US marketed products
-    is_us = chunk["countries_en"].fillna("").str.contains(us_label)
-
-    # Filter 2: Modified within the last 3 years
-    mod_ts = pd.to_numeric(chunk["last_modified_t"], errors="coerce").fillna(0)
-    is_recent = mod_ts >= cutoff_timestamp
-
-    base_filter = is_us & is_recent
-    if not base_filter.any():
-        continue
-
-    chunk_base = chunk[base_filter].copy()
-
-    # Filter 3: Contains at least Nutri-Score or NOVA label
-    valid_nutri = chunk_base["nutriscore_grade"].notna() & (
-        ~chunk_base["nutriscore_grade"].str.lower().str.strip().isin(["unknown", "not-applicable", ""])
-    )
-    valid_nova = chunk_base["nova_group"].notna()
-    has_labels = valid_nutri | valid_nova
-
-    subset = chunk_base[has_labels]
-    # Unlabeled pool: No target labels, but retains ingredients or nutrients for inference
-    subset_unlabeled = chunk_base[
-        (~has_labels)
-        & (chunk_base["ingredients_text"].notna() | chunk_base["energy_100g"].notna())
-    ]
-
-    # Convert numeric fields
-    for col in numeric_fields:
-        if col in subset.columns:
-            subset.loc[:, col] = pd.to_numeric(subset[col], errors="coerce")
-        if col in subset_unlabeled.columns:
-            subset_unlabeled.loc[:, col] = pd.to_numeric(subset_unlabeled[col], errors="coerce")
-
-    # Stream write labeled processed dataset
-    if not subset.empty:
-        subset.to_csv(
-            PROCESSED_FILE_PATH,
-            mode="w" if first_chunk_proc else "a",
-            header=first_chunk_proc,
-            index=False,
+    Dates are UTC last-modification timestamps, not launch dates or historical
+    product versions. Bad TSV lines raise errors. Cache provenance is checked
+    against source byte size, nanosecond modification time, and filter settings.
+    """
+    raw = config.raw_path
+    if not raw.is_file():
+        raise FileNotFoundError(
+            f"Raw OFF archive not found: {raw}. Set TEAM33_RAW_PATH or edit PipelineConfig."
         )
-        first_chunk_proc = False
-        total_records += len(subset)
-
-    # Stream write unlabeled dataset
-    if not subset_unlabeled.empty:
-        subset_unlabeled.to_csv(
-            UNLABELED_FILE_PATH,
-            mode="w" if first_chunk_unlab else "a",
-            header=first_chunk_unlab,
-            index=False,
+    config.cache_dir.mkdir(parents=True, exist_ok=True)
+    output = config.output_dir
+    directories = [output, output / "tables", output / "figures", output / "models"]
+    for directory in directories:
+        directory.mkdir(parents=True, exist_ok=True)
+    cache = config.cache_dir / "us_window_all_211_columns.csv.gz"
+    metadata_path = config.cache_dir / "all_columns_manifest.json"
+    default_window = (config.start_date, config.end_date_exclusive) == ("2024-07-01", "2026-07-01")
+    filter_key = (
+        "exact_country_tag_20240701_20260701_exclusive_v1"
+        if default_window
+        else f"exact_country_tag_{config.start_date}_{config.end_date_exclusive}_exclusive_v1"
+    )
+    stat = raw.stat()
+    fingerprint = {"bytes": stat.st_size, "mtime_ns": stat.st_mtime_ns, "filter": filter_key}
+    metadata = json.loads(metadata_path.read_text()) if metadata_path.exists() else {}
+    verified = cache.exists() and all(metadata.get(k) == v for k, v in fingerprint.items())
+    start = pd.Timestamp(config.start_date, tz="UTC")
+    end = pd.Timestamp(config.end_date_exclusive, tz="UTC")
+    if not verified:
+        retained = scanned = us_rows = 0
+        first = True
+        temporary = cache.with_suffix(".tmp")
+        columns = []
+        started = time.monotonic()
+        with gzip.open(temporary, "wt", encoding="utf-8", newline="") as writer:
+            for number, chunk in enumerate(
+                pd.read_csv(
+                    raw,
+                    sep="\t",
+                    dtype="string",
+                    compression="gzip",
+                    chunksize=50000,
+                    on_bad_lines="error",
+                ),
+                1,
+            ):
+                columns = list(chunk.columns)
+                us = (
+                    chunk["countries_tags"]
+                    .fillna("")
+                    .str.lower()
+                    .str.contains(r"(?:^|,)\s*en:united-states\s*(?:,|$)", regex=True)
+                )
+                timestamp = pd.to_numeric(chunk["last_modified_t"], errors="coerce")
+                selected = chunk.loc[
+                    us & timestamp.ge(start.timestamp()) & timestamp.lt(end.timestamp())
+                ]
+                if len(selected):
+                    selected.to_csv(writer, index=False, header=first)
+                    first = False
+                scanned += len(chunk)
+                us_rows += int(us.sum())
+                retained += len(selected)
+                if number % 10 == 0:
+                    print(
+                        f"Scanned {scanned:,}; retained {retained:,}; elapsed {time.monotonic()-started:.0f}s",
+                        flush=True,
+                    )
+            if first:
+                pd.DataFrame(columns=columns).to_csv(writer, index=False)
+        temporary.replace(cache)
+        metadata = {
+            **fingerprint,
+            "source": str(raw),
+            "raw_rows": scanned,
+            "filtered_rows": retained,
+            "columns": len(columns),
+            "us_market_rows": us_rows,
+        }
+        metadata_path.write_text(json.dumps(metadata, indent=2))
+    else:
+        print("All-column cache verified against the source archive.")
+    df_raw = pd.read_csv(cache, dtype="string", low_memory=False)
+    if len(df_raw) != metadata["filtered_rows"] or len(df_raw.columns) != metadata["columns"]:
+        raise ValueError("Cache dimensions do not match its manifest; rebuild the cache.")
+    manifest = {
+        "source_path": str(raw),
+        "source_bytes": metadata["bytes"],
+        "raw_rows_scanned": metadata["raw_rows"],
+        "us_window_rows": len(df_raw),
+        "columns_loaded": len(df_raw.columns),
+        "filter_version": filter_key,
+        "us_market_rows": metadata.get("us_market_rows"),
+        "market_count_source": "cache manifest; unavailable in older cache manifests",
+    }
+    actual_latest = pd.to_datetime(
+        pd.to_numeric(df_raw["last_modified_t"], errors="coerce"), unit="s", utc=True
+    ).max()
+    state = WorkflowState()
+    state.update(
+        {
+            "df_raw": df_raw,
+            "manifest": manifest,
+            "actual_latest": actual_latest,
+            "OUTPUT_DIR": output,
+            "TABLE_DIR": output / "tables",
+            "FIG_DIR": output / "figures",
+            "MODEL_DIR": output / "models",
+            "SEED": config.seed,
+            "RUN_FINAL_TEST": config.run_final_test,
+            "RUN_TEXT_BASELINE": config.run_text_baseline,
+            "RUN_SHAP": config.run_shap,
+            "REFIT_FOR_DEPLOYMENT": config.refit_for_deployment,
+            "save_table": partial(save_table, table_dir=output / "tables"),
+            "show_figure": partial(show_figure, figure_dir=output / "figures"),
+        }
+    )
+    display(pd.DataFrame([manifest]))
+    display(
+        Markdown(
+            f"**Window records: {len(df_raw):,}. Latest observed modification: {actual_latest}.** "
+            "This is a current-snapshot cohort. Products updated after the window may be absent; "
+            "the extract does not reconstruct historical inventories or recipes."
         )
-        first_chunk_unlab = False
-        unlabeled_records += len(subset_unlabeled)
-
-    print(f"Extracted labeled records: {total_records:,} | Unlabeled: {unlabeled_records:,} ...", end="\r")
-
-    if sample_limit and total_records >= sample_limit:
-        break
-
-print(f"\nProcessed labeled data saved to: '{PROCESSED_FILE_PATH}'")
-print(f"Unlabeled inference data saved to: '{UNLABELED_FILE_PATH}'")
-
-# Generate small test sample for GitHub version control (first 5,000 records)
-df_sample = pd.read_csv(PROCESSED_FILE_PATH, nrows=5000, low_memory=False)
-df_sample.to_csv(SAMPLE_FILE_PATH, index=False)
-print(f"Small repo sample saved to: '{SAMPLE_FILE_PATH}'")
-
-# Load processed dataset for summary generation
-df_processed = pd.read_csv(PROCESSED_FILE_PATH, low_memory=False)
-
-# ==============================================================================
-# 4. Print data summary
-# ==============================================================================
-print("\n" + "=" * 70)
-print(f"DATASET SUMMARY REPORT (US - LAST {data_years} YEARS)")
-print("=" * 70)
-print(f"Raw archive:              {RAW_FILE_PATH}")
-print(f"Processed items:         {PROCESSED_FILE_PATH}")
-print(f"Unlabeled items:         {UNLABELED_FILE_PATH}")
-print(f"Total Labeled Records:    {len(df_processed):,}")
-print(f"Total Unlabeled Records:  {unlabeled_records:,}")
-print(
-    f"Cutoff Date:              >= {time.strftime('%Y-%m-%d', time.gmtime(cutoff_timestamp))} (UTC)"
-)
-
-print("\n--- 1. Nutri-Score Distribution (nutriscore_grade) ---")
-if "nutriscore_grade" in df_processed.columns:
-    nutri_counts = (
-        df_processed["nutriscore_grade"]
-        .str.lower()
-        .str.strip()
-        .value_counts(dropna=False)
     )
-    nutri_pct = (
-        df_processed["nutriscore_grade"]
-        .str.lower()
-        .str.strip()
-        .value_counts(dropna=False, normalize=True)
-        * 100
-    )
-    print(
-        pd.DataFrame({"Count": nutri_counts, "Percentage (%)": nutri_pct.round(2)})
-    )
-
-print("\n--- 2. NOVA Group Distribution (nova_group: 1-4) ---")
-if "nova_group" in df_processed.columns:
-    nova_counts = df_processed["nova_group"].value_counts(dropna=False).sort_index()
-    nova_pct = (
-        df_processed["nova_group"].value_counts(dropna=False, normalize=True)
-        * 100
-    ).sort_index()
-    print(
-        pd.DataFrame({"Count": nova_counts, "Percentage (%)": nova_pct.round(2)})
-    )
-
-valid_nutri_mask = df_processed["nutriscore_grade"].notna() & (
-    ~df_processed["nutriscore_grade"].str.lower().str.strip().isin(["unknown", "not-applicable", ""])
-)
-valid_nova_mask = df_processed["nova_group"].notna()
-dual_label_count = (valid_nutri_mask & valid_nova_mask).sum()
-
-print(
-    f"\n--- 3. Overlap: Products with BOTH Labels ---: {dual_label_count:,} ({dual_label_count / len(df_processed):.1%})"
-)
-
-print("\n--- 4. Feature Coverage (%) ---")
-coverage = (
-    (df_processed.notna().mean() * 100).round(2).to_frame(name="Coverage (%)")
-)
-key_cols = [
-    "product_name",
-    "ingredients_text",
-    "additives_n",
-    "sugars_100g",
-    "fat_100g",
-    "sodium_100g",
-    "energy_100g",
-]
-print(coverage.loc[[c for c in key_cols if c in coverage.index]])
-
-print("\n--- 5. Key Nutritional Attributes Stats (per 100g) ---")
-nutri_cols = [
-    "energy_100g",
-    "fat_100g",
-    "saturated-fat_100g",
-    "sugars_100g",
-    "proteins_100g",
-    "sodium_100g",
-]
-print(
-    df_processed[nutri_cols]
-    .describe()
-    .T[["count", "mean", "std", "50%", "max"]]
-)
+    display(df_raw.head(3)[["code", "product_name", "nova_group", "nutriscore_grade"]])
+    return state

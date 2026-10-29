@@ -1,39 +1,72 @@
-"""Utility Functions
+"""Configuration, explicit workflow state, and reproducible output utilities.
 
-General helper utilities for the project.
+Importing this module never reads datasets, trains models, or writes files.
 """
 
-import json
+from dataclasses import dataclass, field
 from pathlib import Path
-import yaml
+from typing import Any
+import os
 
-def load_config(config_path="config/config.yaml"):
-    """Load configuration from a YAML file."""
-    with open(config_path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
 
-def save_config(config, output_path="config/config.yaml"):
-    """Save config to YAML."""
-    with open(output_path, "w", encoding="utf-8") as f:
-        yaml.safe_dump(config, f, default_flow_style=False)
+@dataclass(frozen=True)
+class PipelineConfig:
+    """Paths and switches used by both the notebook and command-line workflow."""
 
-def create_directory_structure(base_path="."):
-    """Ensure project folders exist."""
-    directories = [
-        "data/raw",
-        "data/processed",
-        "results/figures",
-        "results/tables",
-        "results/models",
-        "notebooks",
-    ]
-    for directory in directories:
-        path = Path(base_path) / directory
-        path.mkdir(parents=True, exist_ok=True)
+    project_root: Path
+    raw_path: Path
+    cache_dir: Path
+    output_dir: Path
+    seed: int = 33
+    run_final_test: bool = False
+    run_text_baseline: bool = True
+    run_shap: bool = True
+    refit_for_deployment: bool = False
+    start_date: str = "2024-07-01"
+    end_date_exclusive: str = "2026-07-01"
 
-def print_summary(data):
-    """Print a summary of data or dictionary content."""
-    if isinstance(data, dict):
-        print(json.dumps(data, indent=2))
-    else:
-        print(data.to_string())
+    @classmethod
+    def from_project(cls, project_root):
+        """Use portable project paths, with optional local environment overrides."""
+        root = Path(project_root).resolve()
+        return cls(
+            project_root=root,
+            raw_path=Path(
+                os.environ.get(
+                    "TEAM33_RAW_PATH", root / "data/raw/en.openfoodfacts.org.products.csv.gz"
+                )
+            ),
+            cache_dir=Path(os.environ.get("TEAM33_CACHE_DIR", root / "data/cache")),
+            output_dir=Path(os.environ.get("TEAM33_OUTPUT_DIR", root / "results")),
+        )
+
+
+@dataclass
+class WorkflowState:
+    """Explicit intermediate artifacts shared between named workflow steps.
+
+    Each step declares the names it reads using require() and publishes only
+    artifacts needed by later steps. Nothing is held in hidden module globals.
+    """
+
+    artifacts: dict[str, Any] = field(default_factory=dict)
+
+    def require(self, name):
+        if name not in self.artifacts:
+            raise KeyError(
+                f"Missing workflow artifact {name!r}; run the preceding notebook steps first."
+            )
+        return self.artifacts[name]
+
+    def update(self, artifacts):
+        self.artifacts.update(artifacts)
+        return self
+
+    def __getitem__(self, name):
+        return self.require(name)
+
+
+def save_table(table, name, table_dir):
+    """Write an actual result table and return it for notebook display."""
+    table.to_csv(Path(table_dir) / name, index=False)
+    return table
