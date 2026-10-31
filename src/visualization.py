@@ -69,6 +69,17 @@ df["has_flavor_enhancer"] = ingredients_text.apply(
     lambda x: 1 if flavor_enhancer_regex.search(x) else 0
 )
 
+df["has_other_additive"] = np.where(
+    (df["additives_n"] > 0)
+    & (df["has_emulsifier"] == 0)
+    & (df["has_preservative"] == 0)
+    & (df["has_sweetener"] == 0)
+    & (df["has_artificial_color"] == 0)
+    & (df["has_flavor_enhancer"] == 0),
+    1,
+    0,
+)
+
 # ==============================================================================
 # 4. Nutri-Score Pipeline: Retain Official Labels & Impute Missing Ones
 # ==============================================================================
@@ -195,6 +206,7 @@ TABLEAU_EXPORT_COLS = [
     "has_preservative",
     "has_artificial_color",
     "has_flavor_enhancer",
+    "has_other_additive"
 ]
 
 # Filter rows that have valid, non-null values for both sugars and sodium
