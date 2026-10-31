@@ -301,8 +301,5 @@ nutri_cols = [
         "sodium_100g",
     ] if c in df_processed.columns
 ]
-print(
-    df_processed[nutri_cols]
-    .describe()
-    .T[["count", "mean", "std", "50%", "max"]]
-)
+
+
