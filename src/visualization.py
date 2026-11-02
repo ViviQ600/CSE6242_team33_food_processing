@@ -1,174 +1,12 @@
-import os
-import re
+"""EDA plots, model diagnostics, and the Tableau-compatible product export."""
+
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
+from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix
 
-# ==============================================================================
-# 1. Path Configuration and Ingestion
-# ==============================================================================
-input_path = os.path.join("data", "processed", "sample_5000_us_food.csv")
-# Use 'sample' in the filename to ensure it is whitelisted by .gitignore
-output_path = os.path.join("data", "processed", "sample_tableau_mock_data.csv")
-
-if not os.path.exists(input_path):
-    input_path = "sample_5000_us_food.csv"
-    output_path = "sample_tableau_mock_data.csv"
-
-df = pd.read_csv(input_path, low_memory=False)
-
-# ==============================================================================
-# 2. Continuous Nutrient Preparation (per 100g)
-# ==============================================================================
-sugars = df["sugars_100g"].fillna(0).clip(lower=0, upper=100)
-sodium = df["sodium_100g"].fillna(0).clip(lower=0, upper=50)  # Sodium in grams
-fat = df["fat_100g"].fillna(0).clip(lower=0, upper=100)
-sat_fat = df["saturated-fat_100g"].fillna(0).clip(lower=0, upper=100)
-fiber = df["fiber_100g"].fillna(0).clip(lower=0, upper=100)
-protein = df["proteins_100g"].fillna(0).clip(lower=0, upper=100)
-energy_kj = df["energy_100g"].fillna(0).clip(lower=0, upper=4000)
-additives_count = df["additives_n"].fillna(0).clip(lower=0)
-ingredients_text = df["ingredients_text"].fillna("").astype(str)
-
-# ==============================================================================
-# 3. NLP Extraction of Chemical Additives (E-numbers / UPF Biomarkers)
-# ==============================================================================
-
-emulsifier_regex = re.compile(
-    r"(?i)\b(e471|e472|emulsifi|lecithin|polysorbate|mono- and diglycerides|carrageenan|xanthan gum|guar gum)\b"
-)
-
-sweetener_regex = re.compile(
-    r"(?i)\b(aspartame|sucralose|acesulfame|saccharin|stevia|maltodextrin|cyclamate)\b"
-)
-
-preservative_regex = re.compile(
-    r"(?i)\b(e200|e202|e211|e250|sodium benzoate|potassium sorbate|sodium nitrite|calcium propionate)\b"
-)
-
-color_regex = re.compile(
-    r"(?i)\b(e102|e110|e129|e133|e150d|caramel color|tartrazine|allura red|sunset yellow|brilliant blue)\b"
-)
-
-flavor_enhancer_regex = re.compile(
-    r"(?i)\b(e621|monosodium glutamate|msg|yeast extract|disodium inosinate|disodium guanylate)\b"
-)
-
-df["has_emulsifier"] = ingredients_text.apply(
-    lambda x: 1 if emulsifier_regex.search(x) else 0
-)
-df["has_sweetener"] = ingredients_text.apply(
-    lambda x: 1 if sweetener_regex.search(x) else 0
-)
-df["has_preservative"] = ingredients_text.apply(
-    lambda x: 1 if preservative_regex.search(x) else 0
-)
-df["has_artificial_color"] = ingredients_text.apply(
-    lambda x: 1 if color_regex.search(x) else 0
-)
-df["has_flavor_enhancer"] = ingredients_text.apply(
-    lambda x: 1 if flavor_enhancer_regex.search(x) else 0
-)
-
-# ==============================================================================
-# 4. Nutri-Score Pipeline: Retain Official Labels & Impute Missing Ones
-# ==============================================================================
-clean_official_grade = (
-    df["nutriscore_grade"].astype(str).str.upper().str.strip()
-)
-is_official_valid = clean_official_grade.isin(["A", "B", "C", "D", "E"])
-
-# Official standard reference proxy points
-points_n = (
-    (energy_kj / 335.0).clip(0, 10)
-    + (sat_fat / 1.0).clip(0, 10)
-    + (sugars / 4.5).clip(0, 10)
-    + (sodium / 0.09).clip(0, 10)
-)
-points_p = (fiber / 0.7).clip(0, 5) + (protein / 1.6).clip(0, 5)
-calculated_score = np.round(points_n - points_p, 1)
-
-grade_conditions = [
-    calculated_score <= -1,
-    (calculated_score >= 0) & (calculated_score <= 2),
-    (calculated_score >= 3) & (calculated_score <= 10),
-    (calculated_score >= 11) & (calculated_score <= 18),
-    calculated_score >= 19,
-]
-imputed_grades = ["A", "B", "C", "D", "E"]
-calculated_grade = np.select(grade_conditions, imputed_grades, default="E")
-
-# Unified final columns (Ground-truth priority)
-df["nutriscore_grade_final"] = np.where(
-    is_official_valid, clean_official_grade, calculated_grade
-)
-df["nutriscore_score_final"] = np.where(
-    df["nutriscore_score"].notna(), df["nutriscore_score"], calculated_score
-)
-df["nutriscore_provenance"] = np.where(
-    is_official_valid, "OFF Official Label", "Auxiliary Imputed"
-)
-
-# ==============================================================================
-# 5. Primary Modeling: NOVA Group Classification & Tree SHAP Sensitivity
-# ==============================================================================
-logit_nova4 = (
-    (sugars * 0.045)
-    + (sodium * 0.95)
-    + (sat_fat * 0.06)
-    + (additives_count * 0.35)
-    + (df["has_emulsifier"] * 0.65)
-    + (df["has_sweetener"] * 0.55)
-    - (fiber * 0.12)
-    - 2.10
-)
-df["pred_nova4_prob"] = np.round(1 / (1 + np.exp(-logit_nova4)), 4)
-
-nova_conditions = [
-    df["pred_nova4_prob"] <= 0.20,
-    (df["pred_nova4_prob"] > 0.20) & (df["pred_nova4_prob"] <= 0.45),
-    (df["pred_nova4_prob"] > 0.45) & (df["pred_nova4_prob"] <= 0.68),
-    df["pred_nova4_prob"] > 0.68,
-]
-df["pred_nova_group"] = np.select(nova_conditions, [1, 2, 3, 4], default=4)
-
-# Marginal sensitivities for What-If sandbox simulation
-df["shap_sugars_nova"] = np.round((sugars / 100.0) * 0.35, 4)
-df["shap_sodium_nova"] = np.round((sodium / 5.0) * 0.25, 4)
-df["shap_additives_nova"] = np.round(
-    np.where(
-        additives_count > 0, 0.20 + 0.05 * np.minimum(additives_count, 5), 0.0
-    ),
-    4,
-)
-df["nutri_sugar_penalty_pts"] = np.round((sugars / 4.5).clip(0, 10), 2)
-df["nutri_sodium_penalty_pts"] = np.round((sodium / 0.09).clip(0, 10), 2)
-
-# ==============================================================================
-# 6. Categorization & Benchmark Identification
-# ==============================================================================
-df["unified_category"] = (
-    df["pnns_groups_1"]
-    .fillna(df["categories_en"].str.split(",").str[0])
-    .fillna("Miscellaneous")
-    .str.strip()
-    .str.title()
-)
-
-df["is_healthy_benchmark"] = np.where(
-    (df["pred_nova_group"] <= 2)
-    & (df["nutriscore_grade_final"].isin(["A", "B"])),
-    "Yes",
-    "No",
-)
-
-# Avoid Null displaying on tooltips if product_name is empty
-df["product_name"] = df["product_name"].fillna("Product " + df["code"].astype(str))
-
-# ==============================================================================
-# 7. Column Selection & High-Quality Export (<1MB, Git Tracked, Zero Nulls)
-# ==============================================================================
-# Keep all exact column names intact to protect Tableau Calculated Fields
-TABLEAU_EXPORT_COLS = [
+TABLEAU_EXPORT_COLUMNS = [
     "code",
     "product_name",
     "unified_category",
@@ -195,27 +33,266 @@ TABLEAU_EXPORT_COLS = [
     "has_preservative",
     "has_artificial_color",
     "has_flavor_enhancer",
+    "has_other_additive",
 ]
 
-# Filter rows that have valid, non-null values for both sugars and sodium
-valid_nutrient_mask = df["sugars_100g"].notna() & df["sodium_100g"].notna()
-df_valid = df[valid_nutrient_mask]
 
-# If valid rows exceed 2,500, take 2,500 rows; otherwise take all valid ones
-target_rows = 2500
-if len(df_valid) >= target_rows:
-    df_tableau = df_valid[TABLEAU_EXPORT_COLS].head(target_rows)
-else:
-    df_tableau = df[TABLEAU_EXPORT_COLS].head(target_rows)
+def plot_eda(correlations, scores, output_dir):
+    """Save nutrient correlation and validation PCA plots."""
+    import matplotlib.pyplot as plt
+    import seaborn as sns
 
-df_tableau.to_csv(output_path, index=False)
+    output_dir = Path(output_dir) / "figures"
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-# ==============================================================================
-# 8. Verification Summary
-# ==============================================================================
-file_size_kb = os.path.getsize(output_path) / 1024
-print("=" * 70)
-print(f"Tableau Mock Data generated successfully: {output_path}")
-print(f"File size: {file_size_kb:.1f} KB (Safe from .gitignore & fast in Tableau)")
-print(f"Total rows: {len(df_tableau):,} | Valid Nutrient Points: {df_tableau['sugars_100g'].notna().sum():,}")
-print("=" * 70)
+    fig, axis = plt.subplots(figsize=(9, 7))
+    sns.heatmap(correlations, annot=True, fmt=".2f", cmap="vlag", center=0, ax=axis)
+    axis.set_title("Nutrient correlations (training data)")
+    fig.tight_layout()
+    fig.savefig(output_dir / "nutrient_correlations.png", dpi=200)
+    plt.close(fig)
+
+    fig, axis = plt.subplots(figsize=(9, 7))
+    scatter = axis.scatter(
+        scores["PC1"],
+        scores["PC2"],
+        c=scores["nova_target"],
+        cmap="viridis",
+        alpha=0.55,
+        s=12,
+    )
+    axis.set(title="Nutrient PCA (validation data)", xlabel="PC1", ylabel="PC2")
+    fig.colorbar(scatter, ax=axis, label="Observed NOVA group")
+    fig.tight_layout()
+    fig.savefig(output_dir / "nutrient_pca_validation.png", dpi=200)
+    plt.close(fig)
+
+
+def plot_model_results(model, validation, comparison, output_dir):
+    """Save NOVA validation confusion matrix and model score comparison."""
+    import matplotlib.pyplot as plt
+
+    output_dir = Path(output_dir) / "figures"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    truth = validation.nova_target.astype(int)
+    prediction = model.predict(validation).astype(int)
+    matrix = confusion_matrix(truth, prediction, labels=[1, 2, 3, 4])
+    fig, axis = plt.subplots(figsize=(7, 6))
+    ConfusionMatrixDisplay(matrix, display_labels=[1, 2, 3, 4]).plot(
+        ax=axis, cmap="Blues", colorbar=False
+    )
+    axis.set_title("NOVA validation confusion matrix")
+    fig.tight_layout()
+    fig.savefig(output_dir / "nova_validation_confusion_matrix.png", dpi=200)
+    plt.close(fig)
+
+    ordered = comparison.sort_values("macro_f1", ascending=True)
+    fig, axis = plt.subplots(figsize=(8, 5))
+    axis.barh(ordered["model"], ordered["macro_f1"], color="#4472C4")
+    axis.set(xlim=(0, 1), xlabel="Macro F1", title="NOVA validation model comparison")
+    fig.tight_layout()
+    fig.savefig(output_dir / "nova_validation_model_comparison.png", dpi=200)
+    plt.close(fig)
+
+
+def _probability_for_class(model, frame, target_class, batch_size=50000):
+    classes = list(model.classes_)
+    if target_class not in classes:
+        raise ValueError(f"Trained model has no class {target_class}.")
+    class_index = classes.index(target_class)
+    return np.concatenate(
+        [
+            model.predict_proba(frame.iloc[start : start + batch_size])[:, class_index]
+            for start in range(0, len(frame), batch_size)
+        ]
+    )
+
+
+def _legacy_sensitivity_fields(model, df, base_probability):
+    """Calculate local probability deltas while retaining Tableau's field names."""
+    from .analysis import INGREDIENT_FEATURES
+
+    results = pd.DataFrame(index=df.index)
+    for nutrient, output_name in [
+        ("sugars_100g", "shap_sugars_nova"),
+        ("sodium_100g", "shap_sodium_nova"),
+    ]:
+        usable = df[nutrient].notna()
+        results[output_name] = np.nan
+        if usable.any():
+            changed = df.loc[usable].copy()
+            changed[nutrient] = 0
+            results.loc[usable, output_name] = (
+                base_probability[usable]
+                - _probability_for_class(model, changed, 4)
+            )
+
+    results["shap_additives_nova"] = np.nan
+    marker_columns = [
+        feature for feature in INGREDIENT_FEATURES if feature.startswith("marker_")
+    ]
+    additive_evidence = df["additives_n_feature"].notna()
+    if marker_columns:
+        additive_evidence |= df[marker_columns].notna().any(axis=1)
+    masks = {
+        "shap_sugars_nova": df["sugars_100g"].notna(),
+        "shap_sodium_nova": df["sodium_100g"].notna(),
+        "shap_additives_nova": additive_evidence,
+    }
+
+    def zero_nutrient(frame, column):
+        frame[column] = 0
+
+    def zero_additives(frame):
+        frame["additives_n_feature"] = 0
+        frame[marker_columns] = 0
+
+    for output_name, column, mask, mutate in [
+        ("shap_sugars_nova", "sugars_100g", masks["shap_sugars_nova"], zero_nutrient),
+        ("shap_sodium_nova", "sodium_100g", masks["shap_sodium_nova"], zero_nutrient),
+        (
+            "shap_additives_nova",
+            "additives_n_feature",
+            masks["shap_additives_nova"],
+            zero_additives,
+        ),
+    ]:
+        positions = np.flatnonzero(mask.to_numpy())
+        deltas = np.full(len(positions), np.nan)
+        for start in range(0, len(positions), 50000):
+            batch_positions = positions[start : start + 50000]
+            changed = df.iloc[batch_positions].copy()
+            if column == "additives_n_feature":
+                mutate(changed)
+            else:
+                mutate(changed, column)
+            deltas[start : start + len(batch_positions)] = (
+                base_probability[batch_positions]
+                - _probability_for_class(model, changed, 4)
+            )
+        results.iloc[
+            positions, results.columns.get_loc(output_name)
+        ] = deltas
+    return results
+
+
+def export_tableau(
+    df,
+    model,
+    model_name,
+    grades,
+    scenarios,
+    importance_table,
+    output_dir,
+    run_final_test,
+):
+    """Export model results for all deduplicated labeled and unlabeled products.
+
+    Tableau's established column names are retained. The historical ``shap_*``
+    columns contain local model probability deltas, not SHAP attributions.
+    """
+    del model_name, scenarios, importance_table
+    from .analysis import tableau_additive_features
+
+    output_dir = Path(output_dir)
+    table_dir = output_dir / "tables"
+    table_dir.mkdir(parents=True, exist_ok=True)
+
+    if df.product_id.duplicated().any():
+        raise ValueError("Tableau export requires unique product_id values.")
+    if grades.product_id.duplicated().any():
+        raise ValueError("Nutri-Score results must have unique product_id values.")
+
+    result = df.merge(
+        grades[
+            [
+                "product_id",
+                "grade_display",
+                "grade_source",
+                "formula_score_2023",
+            ]
+        ],
+        on="product_id",
+        how="left",
+        validate="one_to_one",
+    )
+    if result.grade_source.isna().any():
+        raise ValueError("Nutri-Score results are missing products from the Tableau export.")
+
+    base_probability = _probability_for_class(model, df, 4)
+    output = pd.DataFrame(index=df.index)
+    output["code"] = df["code"].astype("string")
+    output["product_name"] = (
+        df["product_name"].fillna("").astype("string").str.strip()
+    )
+    missing_name = output.product_name.eq("")
+    output.loc[missing_name, "product_name"] = (
+        "Product " + df.loc[missing_name, "product_id"].astype("string")
+    )
+    category = df["category"].fillna("unknown").astype("string").str.strip()
+    output["unified_category"] = category.str.title().where(
+        category.str.lower().ne("unknown"), "Miscellaneous"
+    )
+    output["url"] = df["url"] if "url" in df else pd.NA
+
+    final_test = df.nutri_split.eq("test") & (not run_final_test)
+    grade = result.grade_display.astype("string").str.upper().copy()
+    grade.loc[final_test] = pd.NA
+    source = result.grade_source.astype("string").copy()
+    source.loc[final_test] = "hidden_final_test"
+    output["nutriscore_provenance"] = source
+    output["nutriscore_grade_final"] = grade
+
+    observed_score = pd.to_numeric(
+        df["nutriscore_score"], errors="coerce"
+    ) if "nutriscore_score" in df else pd.Series(np.nan, index=df.index)
+    formula_score = pd.to_numeric(result.formula_score_2023, errors="coerce")
+    score = observed_score.where(result.grade_source.eq("OFF_observed"), formula_score)
+    output["nutriscore_score_final"] = score.mask(final_test)
+
+    output["pred_nova_group"] = np.concatenate(
+        [
+            model.predict(df.iloc[start : start + 50000]).astype(int)
+            for start in range(0, len(df), 50000)
+        ]
+    )
+    output["pred_nova4_prob"] = base_probability
+
+    for nutrient in [
+        "sugars_100g",
+        "sodium_100g",
+        "saturated-fat_100g",
+        "fiber_100g",
+        "proteins_100g",
+    ]:
+        output[nutrient] = (
+            pd.to_numeric(df[nutrient], errors="coerce")
+            if nutrient in df
+            else np.nan
+        )
+    output["additives_n"] = pd.to_numeric(
+        df["additives_n_feature"], errors="coerce"
+    )
+
+    additive_features = tableau_additive_features(df)
+    output[additive_features.columns] = additive_features
+    output = output.join(_legacy_sensitivity_fields(model, df, base_probability))
+
+    sugar = output["sugars_100g"]
+    sodium = output["sodium_100g"]
+    output["nutri_sugar_penalty_pts"] = (sugar / 4.5).clip(0, 10)
+    output["nutri_sodium_penalty_pts"] = (sodium / 0.09).clip(0, 10)
+    output["is_healthy_benchmark"] = np.where(
+        output.pred_nova_group.le(2) & output.nutriscore_grade_final.isin(["A", "B"]),
+        "Yes",
+        "No",
+    )
+
+    tableau = output[TABLEAU_EXPORT_COLUMNS]
+    if len(tableau) != len(df) or tableau.columns.tolist() != TABLEAU_EXPORT_COLUMNS:
+        raise AssertionError("Tableau export does not match the established data contract.")
+    destination = table_dir / "tableau_products.csv"
+    tableau.to_csv(destination, index=False)
+    print(f"Tableau product data saved to: {destination} ({len(tableau):,} rows)")
+    return tableau
