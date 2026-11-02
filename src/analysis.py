@@ -35,6 +35,35 @@ MARKERS = {
     "msg": (r"\b(?:monosodium[-\s]+glutamate|e\s*-?\s*621)\b", {"e621"}),
     "maltodextrin": (r"\bmaltodextrin\b", set()),
 }
+TABLEAU_ADDITIVE_MARKERS = {
+    "has_emulsifier": (
+        r"\b(?:e\s*-?\s*(?:471|472|322|433|407|415|412)|emulsifi\w*|lecithins?|"
+        r"polysorbates?|mono[-\s]+and[-\s]+diglycerides|carrageenan|"
+        r"xanthan(?:[-\s]+gum)?|guar[-\s]+gum)\b",
+        {"e471", "e472", "e322", "e433", "e407", "e415", "e412"},
+    ),
+    "has_sweetener": (
+        r"\b(?:e\s*-?\s*(?:950|951|954|955|960|961|962|952)|aspartame|"
+        r"sucralose|acesulfame|saccharin|stevia|steviol glycosides|"
+        r"cyclamate|maltodextrin)\b",
+        {"e950", "e951", "e954", "e955", "e960", "e961", "e962", "e952"},
+    ),
+    "has_preservative": (
+        r"\b(?:e\s*-?\s*(?:200|202|211|250|282)|sodium benzoate|"
+        r"potassium sorbate|sodium nitrite|calcium propionate)\b",
+        {"e200", "e202", "e211", "e250", "e282"},
+    ),
+    "has_artificial_color": (
+        r"\b(?:e\s*-?\s*(?:102|110|129|133|150d)|caramel color|"
+        r"tartrazine|allura red|sunset yellow|brilliant blue)\b",
+        {"e102", "e110", "e129", "e133", "e150d"},
+    ),
+    "has_flavor_enhancer": (
+        r"\b(?:e\s*-?\s*621|monosodium glutamate|msg|yeast extract|"
+        r"disodium inosinate|disodium guanylate)\b",
+        {"e621", "e631", "e627"},
+    ),
+}
 FVL = "fruits-vegetables-legumes_100g"
 INGREDIENT_FEATURES = [
     "additives_n_feature",
@@ -86,6 +115,33 @@ def ingredient_features(df):
         known = present | matched | (complete_tags if codes else False)
         result["marker_" + name] = matched.astype(float).where(known)
     return result
+
+
+def tableau_additive_features(df):
+    """Derive the legacy Tableau additive flags from ingredient and tag evidence."""
+    ingredients = normalize(field(df, "ingredients_text"))
+    additive_names = normalize(field(df, "additives_en"))
+    tags = field(df, "additives_tags").map(parse_tags)
+    evidence = (
+        ~ingredients.isin(UNKNOWN)
+        | ~additive_names.isin(UNKNOWN)
+        | tags.map(bool)
+    )
+    text = ingredients + " " + additive_names
+    result = pd.DataFrame(index=df.index)
+    for name, (pattern, codes) in TABLEAU_ADDITIVE_MARKERS.items():
+        matched = text.str.contains(pattern, regex=True, na=False) | tags.map(
+            lambda values: bool(values & codes)
+        )
+        result[name] = matched.astype("Int64").where(evidence)
+
+    count = pd.to_numeric(field(df, "additives_n"), errors="coerce")
+    known_flags = result[list(TABLEAU_ADDITIVE_MARKERS)].fillna(0)
+    result["has_other_additive"] = (
+        count.gt(0) & known_flags.eq(0).all(axis=1)
+    ).astype("Int64").where(count.notna())
+    return result
+
 
 def load_processed_data(data_dir, clean_function=None):
     """Read both full exports, preserving identifiers and input-file provenance."""
@@ -286,7 +342,12 @@ def exploratory_analysis(train, validation, output_dir):
     save_table(pd.DataFrame({"component": ["PC1", "PC2"], "variance_ratio": pca.explained_variance_ratio_}), output_dir, "pca_variance.csv")
     plot_eda(correlations, scores, output_dir)
 
-def select_nutrients(training, minimum_coverage=0.60):
+def select_nutrients(training, minimum_coverage=0.25):
+    """Keep varied nutrients with at least 25% training coverage.
+
+    The current Open Food Facts exports have roughly 29-33% coverage for core
+    nutrients; the model pipeline imputes missing values and adds indicators.
+    """
     rows, selected = [], []
     for name in NUTRIENT_CANDIDATES:
         values = training[name]
