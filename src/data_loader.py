@@ -1,3 +1,4 @@
+from pathlib import Path
 import gzip
 import os
 import re
@@ -6,8 +7,10 @@ import urllib.request
 import pandas as pd
 
 # Save to repo directories
-RAW_DIR = os.path.join("data", "raw")
-PROCESSED_DIR = os.path.join("data", "processed")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+RAW_DIR = str(PROJECT_ROOT / "data" / "raw")
+PROCESSED_DIR = str(PROJECT_ROOT / "data" / "processed")
 
 os.makedirs(RAW_DIR, exist_ok=True)
 os.makedirs(PROCESSED_DIR, exist_ok=True)
@@ -68,6 +71,16 @@ ESSENTIAL_COLS = [
     "fiber_100g",
     "proteins_100g",
     "sodium_100g",
+    # --- Added for downstream Nutri-Score formula / family grouping ---
+    "energy-kj_100g",
+    "salt_100g",
+    "carbohydrates_100g",
+    "brands",
+    # Fruit/veg/legume share: columns present depend on the dump version;
+    # missing ones are skipped by the usecols filter below.
+    "fruits-vegetables-legumes_100g",
+    "fruits-vegetables-legumes-estimate-from-ingredients_100g",
+    "fruits-vegetables-nuts-estimate-from-ingredients_100g",
 ]
 
 us_label = re.compile(r"(?i)\b(?:united states|usa|us|america)\b")
@@ -137,7 +150,7 @@ unlabeled_records = 0
 for chunk in pd.read_csv(
     RAW_FILE_PATH,
     sep="\t",
-    usecols=ESSENTIAL_COLS,
+    usecols=lambda c: c in set(ESSENTIAL_COLS),  # tolerate columns absent from this dump
     compression="gzip",
     chunksize=50000,
     low_memory=False,
@@ -301,8 +314,5 @@ nutri_cols = [
         "sodium_100g",
     ] if c in df_processed.columns
 ]
-print(
-    df_processed[nutri_cols]
-    .describe()
-    .T[["count", "mean", "std", "50%", "max"]]
-)
+
+
