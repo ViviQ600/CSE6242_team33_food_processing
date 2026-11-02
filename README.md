@@ -33,6 +33,10 @@ CSV has been generated. The workbook currently uses an absolute local path to
 that CSV; see [Project Overview](docs/PROJECT_OVERVIEW.md) if the repository is
 moved to another machine or folder.
 
+The modeling run also refreshes `data/processed/sample_5000_us_food.csv` and
+`data/processed/sample_tableau_mock_data.csv` from the current inputs and
+Tableau export. Product codes are preserved as text in both samples.
+
 Run the test suite with:
 
 ```powershell
@@ -45,6 +49,6 @@ python -m pytest -q
   dictionary, data structures, formulas, modeling approach, run sequence,
   outputs, and Tableau connection details.
 
-The checked-in `sample_5000_us_food.csv` is a small development sample. The
+The two checked-in sample CSVs are for inspection and Tableau prototyping. The
 modeling command requires both full processed CSVs and will not silently
-substitute the sample.
+substitute either sample.

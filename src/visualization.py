@@ -34,6 +34,7 @@ TABLEAU_EXPORT_COLUMNS = [
     "has_artificial_color",
     "has_flavor_enhancer",
     "has_other_additive",
+    "sub_category",
 ]
 
 
@@ -193,7 +194,7 @@ def export_tableau(
     columns contain local model probability deltas, not SHAP attributions.
     """
     del model_name, scenarios, importance_table
-    from .analysis import tableau_additive_features
+    from .analysis import tableau_additive_features, tableau_categories
 
     output_dir = Path(output_dir)
     table_dir = output_dir / "tables"
@@ -230,10 +231,9 @@ def export_tableau(
     output.loc[missing_name, "product_name"] = (
         "Product " + df.loc[missing_name, "product_id"].astype("string")
     )
-    category = df["category"].fillna("unknown").astype("string").str.strip()
-    output["unified_category"] = category.str.title().where(
-        category.str.lower().ne("unknown"), "Miscellaneous"
-    )
+    categories = tableau_categories(df)
+    output["unified_category"] = categories.unified_category
+    output["sub_category"] = categories.sub_category
     output["url"] = df["url"] if "url" in df else pd.NA
 
     final_test = df.nutri_split.eq("test") & (not run_final_test)
