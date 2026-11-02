@@ -1,11 +1,9 @@
-"""CSE 6242 Team 33 Food Processing Analysis Package"""
+"""CSE 6242 Team 33 food-processing analysis package.
 
-__version__ = "0.1.0"
+Import submodules explicitly. Importing src never downloads or processes data,
+trains models, or executes the standalone data_loader script.
+"""
+
+__version__ = "0.2.0"
 __author__ = "Team 33"
-
-from . import data_processing
-from . import analysis
-from . import visualization
-from . import utils
-
-__all__ = ["data_processing", "analysis", "visualization", "utils"]
+__all__ = ["data_processing", "analysis", "modeling", "visualization", "utils"]
