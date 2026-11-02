@@ -398,7 +398,20 @@ def main():
         print("Final tests have not been run. Test labels are hidden from Tableau exports.")
 
     # 11. Export model predictions, original nutrition, scenarios, and provenance.
-    export_tableau(df, model, best_name, grades, scenarios, importance_table, OUTPUT_DIR, RUN_FINAL_TEST)
+    tableau = export_tableau(
+        df, model, best_name, grades, scenarios, importance_table, OUTPUT_DIR, RUN_FINAL_TEST
+    )
+    raw_sample = pd.read_csv(
+        DATA_DIR / "us_openfoodfacts_nutri_nova_202407_202606.csv",
+        dtype={"code": "string"},
+        nrows=5000,
+        low_memory=False,
+    )
+    raw_sample.to_csv(DATA_DIR / "sample_5000_us_food.csv", index=False)
+    tableau.head(5000).to_csv(
+        DATA_DIR / "sample_tableau_mock_data.csv", index=False
+    )
+    print("Refreshed source and Tableau samples (up to 5,000 rows each).")
     print("Selected model:", best_name)
     print("Scenario products:", scenarios.product_id.nunique())
     print("Results saved to:", OUTPUT_DIR)

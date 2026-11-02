@@ -239,7 +239,12 @@ def main():
     print(f"Unlabeled inference data saved to: '{UNLABELED_FILE_PATH}'")
 
     # Generate small test sample for GitHub version control (first 5,000 records)
-    df_sample = pd.read_csv(PROCESSED_FILE_PATH, nrows=5000, low_memory=False)
+    df_sample = pd.read_csv(
+        PROCESSED_FILE_PATH,
+        dtype={"code": "string"},
+        nrows=5000,
+        low_memory=False,
+    )
     df_sample.to_csv(SAMPLE_FILE_PATH, index=False)
     print(f"Small repo sample saved to: '{SAMPLE_FILE_PATH}'")
 

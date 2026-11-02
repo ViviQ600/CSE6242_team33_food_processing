@@ -71,6 +71,119 @@ INGREDIENT_FEATURES = [
     "ingredient_words",
 ] + ["marker_" + name for name in MARKERS]
 UNKNOWN = {"", "unknown", "none", "null", "nan", "not-applicable", "not applicable"}
+CATEGORY_LABELS = {
+    "alcoholic beverages": "Alcoholic Beverages",
+    "baby foods": "Baby & Infant Foods",
+    "beverages": "Beverages",
+    "cereals and potatoes": "Grains & Bakery",
+    "composite foods": "Prepared Meals",
+    "fat and sauces": "Condiments & Cooking",
+    "fish meat eggs": "Meat & Seafood",
+    "fruits and vegetables": "Fruits & Vegetables",
+    "milk and dairy products": "Dairy & Eggs",
+    "salty snacks": "Snacks & Sweets",
+    "sugary snacks": "Snacks & Sweets",
+}
+CATEGORY_RULES = [
+    (r"\b(?:alcohol|beer|wine|spirits?|liquors?|hard seltzer|cider)\b", "Alcoholic Beverages"),
+    (r"\b(?:baby|infant|formula|baby milks?)\b", "Baby & Infant Foods"),
+    (r"\b(?:supplements?|vitamins?|protein powders?|protein shakes?|sports nutrition|bodybuilding supplements?)\b", "Supplements & Nutrition"),
+    (r"\b(?:non food products?|sunscreen|deodorant|soap)\b", "Other / Unclassified"),
+    (r"\b(?:beverages?|drinks?|water|juice|soda|tea|coffee|smoothies?|kombucha)\b", "Beverages"),
+    (r"\b(?:snacks?|sweets?|cand(?:y|ies)|chocolate|desserts?|cookies?|biscuits?|chips?|crisps?|popcorn|ice cream|pastries|cakes?)\b", "Snacks & Sweets"),
+    (r"\b(?:dairy|milk|yogurt|cheese|butter|cream|eggs?|whey)\b", "Dairy & Eggs"),
+    (r"\b(?:meat|beef|pork|chicken|turkey|poultry|fish|seafood|shrimp|salmon|sausage|bacon|ham|offals?)\b", "Meat & Seafood"),
+    (r"\b(?:fruits?|vegetables?|produce|salads?|legumes?|beans?|lentils?|peas?)\b", "Fruits & Vegetables"),
+    (r"\b(?:cereals?|grains?|bread|bakery|baked goods|flour|pasta|rice|noodles?|oats?|crackers?|tortillas?|potatoes)\b", "Grains & Bakery"),
+    (r"\b(?:meals?|entrees?|prepared foods?|frozen foods?|pizza|soups?|broths?|appetizers?|sides?|dumplings?)\b", "Prepared Meals"),
+    (r"\b(?:condiments?|sauces?|dressings?|oils?|fats?|spices?|herbs?|seasonings?|spreads?|sweeteners?|syrups?|vinegars?|toppings?|cooking helpers?)\b", "Condiments & Cooking"),
+]
+PNNS_SUBCATEGORIES = {
+    "unsweetened beverages": ("Unsweetened Beverages", "Beverages"),
+    "bread": ("Bread", "Grains & Bakery"),
+    "milk and yogurt": ("Milk & Yogurt", "Dairy & Eggs"),
+    "biscuits and cakes": ("Biscuits & Cakes", "Grains & Bakery"),
+    "dressings and sauces": ("Dressings & Sauces", "Condiments & Cooking"),
+    "sweets": ("Sweets & Candy", "Snacks & Sweets"),
+    "sandwiches": ("Sandwiches", "Prepared Meals"),
+    "one-dish meals": ("One-Dish Meals", "Prepared Meals"),
+    "cereals": ("Cereals", "Grains & Bakery"),
+    "appetizers": ("Appetizers", "Prepared Meals"),
+    "cheese": ("Cheese", "Dairy & Eggs"),
+    "breakfast cereals": ("Breakfast Cereals", "Grains & Bakery"),
+    "pizza pies and quiches": ("Pizza, Pies & Quiches", "Prepared Meals"),
+    "vegetables": ("Vegetables", "Fruits & Vegetables"),
+    "sweetened beverages": ("Sweetened Beverages", "Beverages"),
+    "artificially sweetened beverages": ("Artificially Sweetened Beverages", "Beverages"),
+    "processed meat": ("Processed Meat", "Meat & Seafood"),
+    "meat": ("Meat & Poultry", "Meat & Seafood"),
+    "fats": ("Fats & Oils", "Condiments & Cooking"),
+    "fish and seafood": ("Fish & Seafood", "Meat & Seafood"),
+    "fruits": ("Fruits", "Fruits & Vegetables"),
+    "nuts": ("Nuts & Seeds", "Fruits & Vegetables"),
+    "eggs": ("Eggs", "Dairy & Eggs"),
+    "legumes": ("Legumes", "Fruits & Vegetables"),
+    "plant-based milk substitutes": ("Plant-Based Milk Alternatives", "Dairy & Eggs"),
+    "waters and flavored waters": ("Water & Flavored Water", "Beverages"),
+    "chocolate products": ("Chocolate", "Snacks & Sweets"),
+    "ice cream": ("Ice Cream", "Dairy & Eggs"),
+    "fruit juices": ("Fruit Juice", "Beverages"),
+    "dried fruits": ("Dried Fruit", "Fruits & Vegetables"),
+    "potatoes": ("Potatoes", "Grains & Bakery"),
+    "teas and herbal teas and coffees": ("Tea & Coffee", "Beverages"),
+    "salty and fatty products": ("Salty Snacks", "Snacks & Sweets"),
+    "alcoholic beverages": ("Alcoholic Beverages", "Alcoholic Beverages"),
+    "dairy desserts": ("Dairy Desserts", "Dairy & Eggs"),
+    "pastries": ("Pastries", "Grains & Bakery"),
+    "soups": ("Soups & Broths", "Prepared Meals"),
+    "baby foods": ("Baby Foods", "Baby & Infant Foods"),
+    "fruit nectars": ("Fruit Nectars", "Beverages"),
+    "baby milks": ("Baby Formula", "Baby & Infant Foods"),
+    "offals": ("Offal", "Meat & Seafood"),
+}
+SUBCATEGORY_RULES = [
+    (r"\b(?:artificially sweetened beverages?|diet drinks?|zero[- ]sugar drinks?)\b", "Beverages", "Artificially Sweetened Beverages"),
+    (r"\b(?:unsweetened beverages?|plain water|mineral water|spring water)\b", "Beverages", "Unsweetened Beverages"),
+    (r"\b(?:sweetened beverages?|soft drinks?|sodas?|energy drinks?|sports drinks?)\b", "Beverages", "Sweetened Beverages"),
+    (r"\b(?:fruit juices?|fruit nectars?)\b", "Beverages", "Fruit Juice"),
+    (r"\b(?:teas?|coffees?|kombucha)\b", "Beverages", "Tea & Coffee"),
+    (r"\b(?:waters?|beverages?|drinks?|juices?)\b", "Beverages", "Other Beverages"),
+    (r"\b(?:baby milks?|infant formulas?|baby formulas?)\b", "Baby & Infant Foods", "Baby Formula"),
+    (r"\b(?:baby foods?|infant foods?)\b", "Baby & Infant Foods", "Baby Foods"),
+    (r"\b(?:processed meat|sausages?|bacon|ham|deli meats?)\b", "Meat & Seafood", "Processed Meat"),
+    (r"\b(?:fish|seafood|shrimp|salmon|tuna|shellfish)\b", "Meat & Seafood", "Fish & Seafood"),
+    (r"\b(?:meat|beef|pork|chicken|turkey|poultry|offal)\b", "Meat & Seafood", "Meat & Poultry"),
+    (r"\b(?:milk|yogurt|yoghurt|dairy|cheese|whey|cream|butter)\b", "Dairy & Eggs", "Milk & Dairy"),
+    (r"\b(?:plant[- ]based milk|milk substitutes?|dairy alternatives?)\b", "Dairy & Eggs", "Plant-Based Milk Alternatives"),
+    (r"\b(?:eggs?)\b", "Dairy & Eggs", "Eggs"),
+    (r"\b(?:ice cream|frozen desserts?)\b", "Dairy & Eggs", "Ice Cream & Frozen Desserts"),
+    (r"\b(?:dairy desserts?)\b", "Dairy & Eggs", "Dairy Desserts"),
+    (r"\b(?:salty snacks?|chips?|crisps?|popcorn|pretzels?)\b", "Snacks & Sweets", "Salty Snacks"),
+    (r"\b(?:chocolate|cocoa)\b", "Snacks & Sweets", "Chocolate"),
+    (r"\b(?:sweets?|cand(?:y|ies)|gummies?)\b", "Snacks & Sweets", "Sweets & Candy"),
+    (r"\b(?:biscuits?|cookies?|crackers?)\b", "Grains & Bakery", "Biscuits & Crackers"),
+    (r"\b(?:cakes?|pastries?|croissants?|baked goods?)\b", "Grains & Bakery", "Cakes & Pastries"),
+    (r"\b(?:breakfast cereals?|granola|oatmeal)\b", "Grains & Bakery", "Breakfast Cereals"),
+    (r"\b(?:bread|bagels?|buns?|rolls?)\b", "Grains & Bakery", "Bread"),
+    (r"\b(?:cereals?|grains?|pasta|rice|noodles?|flour|potatoes)\b", "Grains & Bakery", "Cereals & Starches"),
+    (r"\b(?:sandwiches?|wraps?)\b", "Prepared Meals", "Sandwiches"),
+    (r"\b(?:pizza|pies?|quiches?)\b", "Prepared Meals", "Pizza, Pies & Quiches"),
+    (r"\b(?:soups?|broths?)\b", "Prepared Meals", "Soups & Broths"),
+    (r"\b(?:appetizers?|sides?|dumplings?)\b", "Prepared Meals", "Appetizers & Sides"),
+    (r"\b(?:one[- ]dish meals?|entrees?|prepared meals?|frozen meals?)\b", "Prepared Meals", "Prepared Meals"),
+    (r"\b(?:fruit juices?|fruit nectars?|juices?)\b", "Beverages", "Fruit Juice"),
+    (r"\bfruits? and vegetables\b", "Fruits & Vegetables", "Fruits & Vegetables"),
+    (r"\b(?:fruits?|berries|dried fruits?)\b", "Fruits & Vegetables", "Fruits"),
+    (r"\b(?:vegetables?|salads?|produce)\b", "Fruits & Vegetables", "Vegetables"),
+    (r"\b(?:legumes?|beans?|lentils?|peas?|nuts?|seeds?)\b", "Fruits & Vegetables", "Legumes, Nuts & Seeds"),
+    (r"\b(?:dressings?|sauces?|condiments?|salsa)\b", "Condiments & Cooking", "Dressings & Sauces"),
+    (r"\b(?:oils?|fats?|margarine)\b", "Condiments & Cooking", "Fats & Oils"),
+    (r"\b(?:sweeteners?|syrups?|honey)\b", "Condiments & Cooking", "Sweeteners & Syrups"),
+    (r"\b(?:spices?|herbs?|seasonings?)\b", "Condiments & Cooking", "Herbs & Spices"),
+    (r"\b(?:alcohol|beer|wine|spirits?|liquors?|hard seltzer|cider)\b", "Alcoholic Beverages", "Alcoholic Beverages"),
+    (r"\b(?:protein powders?|protein shakes?|bodybuilding supplements?)\b", "Supplements & Nutrition", "Protein Supplements"),
+    (r"\b(?:supplements?|vitamins?|protein powders?|protein shakes?|sports nutrition)\b", "Supplements & Nutrition", "Supplements & Nutrition"),
+]
 
 
 def field(df, name):
@@ -85,6 +198,79 @@ def normalize(series):
         .str.strip()
         .str.replace(r"\s+", " ", regex=True)
     )
+
+
+def tableau_categories(raw):
+    """Return compact category and subcategory display dimensions."""
+    pnns = normalize(field(raw, "pnns_groups_1"))
+    category = pnns.map(CATEGORY_LABELS)
+    unknown = category.isna()
+    category_text = normalize(field(raw, "categories_en"))
+    category_text = category_text.str.replace(
+        "plant-based foods and beverages", "", regex=False
+    )
+    detail_text = normalize(field(raw, "pnns_groups_2"))
+    fallback_text = category_text + " " + detail_text
+
+    def apply_category_rules(text, mask):
+        for pattern, label in CATEGORY_RULES:
+            matched = mask & text.str.contains(pattern, regex=True, na=False)
+            category.loc[matched] = label
+            mask &= ~matched
+        return mask
+
+    unresolved = apply_category_rules(fallback_text, unknown.copy())
+    product_text = normalize(field(raw, "product_name"))
+    apply_category_rules(product_text, unresolved)
+    category = category.fillna("Other / Unclassified").astype("string")
+
+    pnns_detail = detail_text.map(PNNS_SUBCATEGORIES)
+    subcategory = pnns_detail.map(
+        lambda value: value[0] if isinstance(value, tuple) else pd.NA
+    ).astype("string")
+    detail_parent = pnns_detail.map(
+        lambda value: value[1] if isinstance(value, tuple) else pd.NA
+    )
+    subcategory = subcategory.where(detail_parent.eq(category))
+
+    def apply_subcategory_rules(text):
+        for pattern, parent, label in SUBCATEGORY_RULES:
+            matched = (
+                subcategory.isna()
+                & category.eq(parent)
+                & text.str.contains(pattern, regex=True, na=False)
+            )
+            subcategory.loc[matched] = label
+
+    apply_subcategory_rules(fallback_text)
+    apply_subcategory_rules(product_text)
+    default_subcategory = category.map(
+        {
+            "Beverages": "Other Beverages",
+            "Grains & Bakery": "Other Grains & Bakery",
+            "Fruits & Vegetables": "Other Fruits & Vegetables",
+            "Dairy & Eggs": "Other Dairy & Eggs",
+            "Meat & Seafood": "Other Meat & Seafood",
+            "Prepared Meals": "Other Prepared Foods",
+            "Snacks & Sweets": "Other Snacks & Sweets",
+            "Condiments & Cooking": "Other Condiments",
+            "Baby & Infant Foods": "Other Baby Foods",
+            "Alcoholic Beverages": "Other Alcoholic Beverages",
+            "Supplements & Nutrition": "Other Supplements",
+            "Other / Unclassified": "Other / Unclassified",
+        }
+    )
+    subcategory = subcategory.fillna(default_subcategory).astype("string")
+    return pd.DataFrame(
+        {"unified_category": category, "sub_category": subcategory},
+        index=raw.index,
+    )
+
+
+def tableau_category(raw):
+    """Return the broad Tableau display category."""
+    return tableau_categories(raw)["unified_category"]
+
 
 def parse_tags(value):
     if pd.isna(value) or str(value).strip().lower() in UNKNOWN:

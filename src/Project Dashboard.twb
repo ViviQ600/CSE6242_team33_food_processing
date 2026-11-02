@@ -102,15 +102,17 @@
         <calculation class='tableau' formula='&quot;Beverages&quot;' />
         <members>
           <member value='&quot;Beverages&quot;' />
-          <member value='&quot;Cereals And Potatoes&quot;' />
-          <member value='&quot;Composite Foods&quot;' />
-          <member value='&quot;Fat And Sauces&quot;' />
-          <member value='&quot;Fish Meat Eggs&quot;' />
-          <member value='&quot;Fruits And Vegetables&quot;' />
-          <member value='&quot;Milk And Dairy Products&quot;' />
-          <member value='&quot;Salty Snacks&quot;' />
-          <member value='&quot;Sugary Snacks&quot;' />
-          <member value='&quot;Unknown&quot;' />
+          <member value='&quot;Grains &amp; Bakery&quot;' />
+          <member value='&quot;Fruits &amp; Vegetables&quot;' />
+          <member value='&quot;Dairy &amp; Eggs&quot;' />
+          <member value='&quot;Meat &amp; Seafood&quot;' />
+          <member value='&quot;Prepared Meals&quot;' />
+          <member value='&quot;Snacks &amp; Sweets&quot;' />
+          <member value='&quot;Condiments &amp; Cooking&quot;' />
+          <member value='&quot;Baby &amp; Infant Foods&quot;' />
+          <member value='&quot;Supplements &amp; Nutrition&quot;' />
+          <member value='&quot;Alcoholic Beverages&quot;' />
+          <member value='&quot;Other / Unclassified&quot;' />
         </members>
       </column>
       <column caption='Param_NOVA4_Threshold' datatype='real' name='[Parameter 13039443833724957]' param-domain-type='range' role='measure' type='quantitative' value='0.68'>
@@ -154,6 +156,7 @@
             <column datatype='integer' name='has_artificial_color' ordinal='24' />
             <column datatype='integer' name='has_flavor_enhancer' ordinal='25' />
             <column datatype='integer' name='has_other_additive' ordinal='26' />
+            <column datatype='string' name='sub_category' ordinal='27' />
           </columns>
         </relation>
         <metadata-records>
@@ -504,6 +507,33 @@
             <contains-null>true</contains-null>
             <object-id>[tableau_products.csv_679C8860DBCB4B60B8E1517440343A68]</object-id>
           </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>has_other_additive</remote-name>
+            <remote-type>20</remote-type>
+            <local-name>[has_other_additive]</local-name>
+            <parent-name>[tableau_products.csv]</parent-name>
+            <remote-alias>has_other_additive</remote-alias>
+            <ordinal>26</ordinal>
+            <local-type>integer</local-type>
+            <aggregation>Sum</aggregation>
+            <contains-null>true</contains-null>
+            <object-id>[tableau_products.csv_679C8860DBCB4B60B8E1517440343A68]</object-id>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>sub_category</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[sub_category]</local-name>
+            <parent-name>[tableau_products.csv]</parent-name>
+            <remote-alias>sub_category</remote-alias>
+            <ordinal>27</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <scale>1</scale>
+            <width>1073741823</width>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='LZH_RCN' />
+            <object-id>[tableau_products.csv_679C8860DBCB4B60B8E1517440343A68]</object-id>
+          </metadata-record>
         </metadata-records>
       </connection>
       <aliases enabled='yes' />
@@ -514,6 +544,7 @@
       <column caption='Has Artificial Color' datatype='integer' name='[has_artificial_color]' role='measure' type='quantitative' />
       <column caption='Has Emulsifier' datatype='integer' name='[has_emulsifier]' role='measure' type='quantitative' />
       <column caption='Has Flavor Enhancer' datatype='integer' name='[has_flavor_enhancer]' role='measure' type='quantitative' />
+      <column caption='Has Other Additive' datatype='integer' name='[has_other_additive]' role='measure' type='quantitative' />
       <column caption='Has Preservative' datatype='integer' name='[has_preservative]' role='measure' type='quantitative' />
       <column caption='Has Sweetener' datatype='integer' name='[has_sweetener]' role='measure' type='quantitative' />
       <column caption='Is Healthy Benchmark' datatype='string' name='[is_healthy_benchmark]' role='dimension' type='nominal' />
@@ -533,6 +564,7 @@
       <column caption='Sodium 100G' datatype='real' name='[sodium_100g]' role='measure' type='quantitative' />
       <column caption='Sugars 100G' datatype='real' name='[sugars_100g]' role='measure' type='quantitative' />
       <column caption='Unified Category' datatype='string' name='[unified_category]' role='dimension' type='nominal' />
+      <column caption='Sub Category' datatype='string' name='[sub_category]' role='dimension' type='nominal' />
       <column caption='Url' datatype='string' name='[url]' role='dimension' type='nominal' />
       <layout dim-ordering='alphabetic' measure-ordering='alphabetic' show-structure='true' />
       <semantic-values>
@@ -571,6 +603,8 @@
                   <column datatype='integer' name='has_preservative' ordinal='23' />
                   <column datatype='integer' name='has_artificial_color' ordinal='24' />
                   <column datatype='integer' name='has_flavor_enhancer' ordinal='25' />
+                  <column datatype='integer' name='has_other_additive' ordinal='26' />
+                  <column datatype='string' name='sub_category' ordinal='27' />
                 </columns>
               </relation>
             </properties>
@@ -614,6 +648,7 @@
             <column datatype='integer' name='has_artificial_color' ordinal='24' />
             <column datatype='integer' name='has_flavor_enhancer' ordinal='25' />
             <column datatype='integer' name='has_other_additive' ordinal='26' />
+            <column datatype='string' name='sub_category' ordinal='27' />
           </columns>
         </relation>
         <metadata-records>
@@ -976,6 +1011,21 @@
             <contains-null>true</contains-null>
             <object-id>[tableau_products.csv_E50F1408C34F4039A2A589407EF23E61]</object-id>
           </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>sub_category</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[sub_category]</local-name>
+            <parent-name>[tableau_products.csv]</parent-name>
+            <remote-alias>sub_category</remote-alias>
+            <ordinal>27</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <scale>1</scale>
+            <width>1073741823</width>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='LZH_RCN' />
+            <object-id>[tableau_products.csv_E50F1408C34F4039A2A589407EF23E61]</object-id>
+          </metadata-record>
         </metadata-records>
       </connection>
       <aliases enabled='yes' />
@@ -1083,6 +1133,7 @@
       <column caption='Sodium 100G' datatype='real' name='[sodium_100g]' role='measure' type='quantitative' />
       <column caption='Sugars 100G' datatype='real' name='[sugars_100g]' role='measure' type='quantitative' />
       <column caption='Unified Category' datatype='string' name='[unified_category]' role='dimension' type='nominal' />
+      <column caption='Sub Category' datatype='string' name='[sub_category]' role='dimension' type='nominal' />
       <column caption='Url' datatype='string' name='[url]' role='dimension' type='nominal' />
       <column-instance column='[pred_nova_group]' derivation='Attribute' name='[attr:pred_nova_group:ok]' pivot='key' type='ordinal' />
       <column-instance column='[Calculation_13039443503923211]' derivation='Avg' name='[avg:Calculation_13039443503923211:qk]' pivot='key' type='quantitative' />
@@ -1622,6 +1673,7 @@
                   <column datatype='integer' name='has_artificial_color' ordinal='24' />
                   <column datatype='integer' name='has_flavor_enhancer' ordinal='25' />
                   <column datatype='integer' name='has_other_additive' ordinal='26' />
+                  <column datatype='string' name='sub_category' ordinal='27' />
                 </columns>
               </relation>
             </properties>
@@ -1641,10 +1693,16 @@
       <datasource-dependencies datasource='federated.1tjvipp1mqvyp916upkvw0hj7oht'>
         <column-instance column='[unified_category]' derivation='None' name='[none:unified_category:nk]' pivot='key' type='nominal' />
         <column caption='Unified Category' datatype='string' name='[unified_category]' role='dimension' type='nominal' />
+        <column-instance column='[sub_category]' derivation='None' name='[none:sub_category:nk]' pivot='key' type='nominal' />
+        <column caption='Sub Category' datatype='string' name='[sub_category]' role='dimension' type='nominal' />
       </datasource-dependencies>
       <filter class='categorical' column='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[none:unified_category:nk]'>
         <groupfilter function='level-members' level='[none:unified_category:nk]' user:ui-enumeration='all' user:ui-marker='enumerate' />
         <target field='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[none:unified_category:nk]' />
+      </filter>
+      <filter class='categorical' column='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[none:sub_category:nk]'>
+        <groupfilter function='level-members' level='[none:sub_category:nk]' user:ui-domain='relevant' user:ui-enumeration='all' user:ui-marker='enumerate' />
+        <target field='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[none:sub_category:nk]' />
       </filter>
     </shared-view>
   </shared-views>
@@ -2718,7 +2776,8 @@
             <format attr='margin' value='8' />
           </zone-style>
         </zone>
-        <zone h='5587' id='11' mode='checkdropdown' name='Nutritional Space' param='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[none:unified_category:nk]' type-v2='filter' w='17494' x='2766' y='2654' />
+        <zone h='5587' id='11' mode='dropdown' name='Category' param='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[none:unified_category:nk]' type-v2='filter' w='17494' x='2766' y='2654' />
+        <zone h='5587' id='36' mode='checkdropdown' name='Sub Category' param='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[none:sub_category:nk]' type-v2='filter' w='17494' x='20260' y='2654' />
       </zones>
       <devicelayouts>
         <devicelayout auto-generated='true' name='Phone'>
@@ -2742,7 +2801,16 @@
                     <format attr='padding' value='0' />
                   </zone-style>
                 </zone>
-                <zone h='5587' id='11' mode='checkdropdown' name='Nutritional Space' param='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[none:unified_category:nk]' type-v2='filter' w='17494' x='2766' y='2654'>
+                <zone h='5587' id='11' mode='dropdown' name='Category' param='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[none:unified_category:nk]' type-v2='filter' w='17494' x='2766' y='2654'>
+                  <zone-style>
+                    <format attr='border-color' value='#000000' />
+                    <format attr='border-style' value='none' />
+                    <format attr='border-width' value='0' />
+                    <format attr='margin' value='4' />
+                    <format attr='padding' value='0' />
+                  </zone-style>
+                </zone>
+                <zone h='5587' id='36' mode='checkdropdown' name='Sub Category' param='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[none:sub_category:nk]' type-v2='filter' w='17494' x='2766' y='8241'>
                   <zone-style>
                     <format attr='border-color' value='#000000' />
                     <format attr='border-style' value='none' />
@@ -2936,6 +3004,7 @@
         <edge name='right'>
           <strip size='160'>
             <card param='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[none:unified_category:nk]' type='filter' />
+            <card param='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[none:sub_category:nk]' type='filter' />
             <card mode='slider' param='[Parameters].[Parameter 13039443461939200]' type='parameter' />
             <card pane-specification-id='0' param='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[sum:pred_nova_group:ok]' type='color' />
             <card pane-specification-id='0' param='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[sum:additives_n:qk]' type='size' />

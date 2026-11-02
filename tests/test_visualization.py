@@ -1,7 +1,13 @@
 import numpy as np
 import pandas as pd
 
-from src.analysis import INGREDIENT_FEATURES, ingredient_features, tableau_additive_features
+from src.analysis import (
+    INGREDIENT_FEATURES,
+    ingredient_features,
+    tableau_additive_features,
+    tableau_category,
+    tableau_categories,
+)
 from src.visualization import TABLEAU_EXPORT_COLUMNS, export_tableau
 
 
@@ -42,6 +48,62 @@ def test_tableau_additive_features_use_ingredient_and_tag_evidence():
     assert features.loc[2, "has_other_additive"] == 0
 
 
+def test_tableau_category_collapses_taxonomy_and_recovers_unknown_groups():
+    frame = pd.DataFrame(
+        {
+            "pnns_groups_1": [
+                "Beverages",
+                "Cereals and potatoes",
+                "unknown",
+                "unknown",
+                "unknown",
+                "unknown",
+                "unknown",
+            ],
+            "pnns_groups_2": [
+                "Unsweetened beverages",
+                "Bread",
+                "Vegetables",
+                "Chocolate products",
+                "unknown",
+                "unknown",
+                "unknown",
+            ],
+            "categories_en": [
+                "Beverages",
+                "Cereals-and-potatoes",
+                "Plant-based foods and beverages,Plant-based foods,Fruits and vegetables",
+                "Chocolate-products",
+                "Dietary supplements,Bodybuilding supplements,Protein powders",
+                "Null",
+                "3-In-1-Coffee",
+            ],
+            "product_name": [None, None, None, None, None, "A product", None],
+        }
+    )
+
+    assert tableau_category(frame).tolist() == [
+        "Beverages",
+        "Grains & Bakery",
+        "Fruits & Vegetables",
+        "Snacks & Sweets",
+        "Supplements & Nutrition",
+        "Other / Unclassified",
+        "Beverages",
+    ]
+    details = tableau_categories(frame)
+    assert details.sub_category.tolist() == [
+        "Unsweetened Beverages",
+        "Bread",
+        "Vegetables",
+        "Chocolate",
+        "Protein Supplements",
+        "Other / Unclassified",
+        "Tea & Coffee",
+    ]
+    assert details.unified_category.tolist() == tableau_category(frame).tolist()
+
+
 def test_tableau_export_keeps_workbook_schema_and_hides_test_grade(tmp_path):
     frame = pd.DataFrame(
         {
@@ -50,6 +112,9 @@ def test_tableau_export_keeps_workbook_schema_and_hides_test_grade(tmp_path):
             "product_name": ["Product one", None],
             "url": ["https://example.test/1", "https://example.test/2"],
             "category": ["snacks", "unknown"],
+            "pnns_groups_1": ["Sugary snacks", "unknown"],
+            "pnns_groups_2": ["unknown", "unknown"],
+            "categories_en": ["snacks", "3-In-1-Coffee"],
             "ingredients_text_norm": ["sugar", "sucralose"],
             "ingredients_text": ["sugar", "sucralose"],
             "additives_tags": [None, "en:e955"],
@@ -87,6 +152,8 @@ def test_tableau_export_keeps_workbook_schema_and_hides_test_grade(tmp_path):
     )
 
     assert exported.columns.tolist() == TABLEAU_EXPORT_COLUMNS
+    assert "sub_category" in exported.columns
+    assert exported.sub_category.notna().all()
     assert len(exported) == 2
     assert exported.code.tolist() == ["100110296241329314942455330", "2"]
     assert pd.isna(exported.loc[0, "nutriscore_grade_final"])

@@ -10,9 +10,9 @@ dataset.
 
 The loader selects products marketed in the United States and modified between
 2024-07-01 00:00:00 UTC and 2026-06-30 23:59:59 UTC. The latest local processed
-snapshot contains 208,036 labeled-pool rows and 55,861 unlabeled-pool rows;
+snapshot contains 208,036 labeled-pool rows and 56,198 unlabeled-pool rows;
 after exact deduplication and latest-record-per-code selection, the model
-workflow contains 263,897 unique products. These counts describe the current
+workflow contains 264,234 products. These counts describe the current
 local data, not a permanent guarantee: the Open Food Facts dump can change.
 
 ## Repository map (file by file)
@@ -30,14 +30,14 @@ local data, not a permanent guarantee: the Open Food Facts dump can change.
 | `data/processed/.gitkeep` | Keeps the processed-data folder in Git when local datasets are absent. |
 | `data/processed/us_openfoodfacts_nutri_nova_202407_202606.csv` | Full processed pool with at least one valid NOVA or Nutri-Score label; not tracked. |
 | `data/processed/us_openfoodfacts_unlabeled_202407_202606.csv` | Products with neither valid target label but with ingredient or nutrient evidence; not tracked. |
-| `data/processed/sample_5000_us_food.csv` | Small, tracked sample for inspection and tests. Not used by the full model workflow. |
-| `data/processed/sample_tableau_mock_data.csv` | Legacy Tableau mock export from the former heuristic visualization script. Do not use for current analysis/dashboard refresh. |
+| `data/processed/sample_5000_us_food.csv` | Refreshed 5,000-row source-data sample, with product codes preserved as text. Not used as model input. |
+| `data/processed/sample_tableau_mock_data.csv` | Refreshed 5,000-row preview of the current Tableau export, including both category fields. |
 | `notebooks/.gitkeep` | Placeholder only; there are no current notebook workflow steps. |
 | `src/__init__.py` | Package metadata; importing `src` does not run the pipeline. |
 | `src/data_loader.py` | Downloads/reads the raw dump, filters the date/country window, and writes the two processed pools and sample. |
 | `src/data_processing.py` | Small reusable CSV/Excel reader, exact-row deduplicator, and CSV writer. The main pipeline uses `clean_data` for exact deduplication. |
 | `src/analysis.py` | Data-source merge, product-level deduplication, normalization, feature engineering, grouped splits, nutrient selection, PCA, and additive evidence extraction. |
-| `src/modeling.py` | NOVA model comparison, Nutri-Score rule/model completion, ingredient sensitivity scenarios, metrics, and orchestration. |
+| `src/modeling.py` | NOVA model comparison, Nutri-Score rule/model completion, ingredient sensitivity scenarios, metrics, orchestration, and refreshing both samples. |
 | `src/visualization.py` | EDA/model diagnostic figures and the Tableau-compatible CSV export. |
 | `src/utils.py` | Shared nutrient names and `results/tables` CSV writer. |
 | `src/Project Dashboard.twb` | Tableau workbook. It is an XML workbook (`.twb`, not `.twd`) connected to `results/tables/tableau_products.csv`. |
@@ -61,7 +61,7 @@ Run commands from the repository root in PowerShell.
    ```
 
    This downloads the current public dump only when the expected raw archive is
-   absent. It writes the labeled pool, unlabeled pool, and first-5,000-row sample
+   absent. It writes the labeled pool, unlabeled pool, and    first-5,000-row source sample
    into `data/processed/`. It can take substantial disk space and time.
 3. **Run the complete modeling and export workflow**:
 
@@ -71,6 +71,7 @@ Run commands from the repository root in PowerShell.
 
    If both full processed CSVs already exist, this is the only required
    pipeline command. The sample files are not substitutes.
+   The command also refreshes the source sample and a 5,000-row Tableau preview.
 4. **Open the Tableau workbook**:
 
    ```text
@@ -87,11 +88,15 @@ Run commands from the repository root in PowerShell.
 
 ## Tableau workbook status and portability
 
-The workbook was updated to read the current 27-column Tableau export from
+The workbook was updated to read the current 28-column Tableau export from
 `results/tables/tableau_products.csv`; both workbook data sources use the same
 schema. `code` is a string in the workbook so long Open Food Facts identifiers
 are preserved. The local CSV has been generated and validated, so the workbook
 can be opened directly in Tableau on this machine.
+
+The dashboard's **Category** control is a single-value dropdown. The
+**Sub Category** control is a checkbox dropdown that supports select-all,
+multiple values, or one value; its values are limited to the selected category.
 
 The `.twb` contains an absolute `directory` value for the current repository
 location. If the repository is copied to a different folder or machine, Tableau
@@ -135,8 +140,9 @@ Connection** (or reconnect the data source) and select the new
 - `nova_model.joblib` — selected NOVA pipeline.
 - `nutriscore_model.joblib` — nutrient-based Nutri-Score completion pipeline.
 
-Generated files are ignored by Git. Run the model workflow again to refresh
-them; do not use `sample_tableau_mock_data.csv` for the current dashboard.
+Generated results are ignored by Git. Run the model workflow again to refresh
+them; the dashboard uses the full export, while the tracked sample is for
+inspection and Tableau prototyping.
 
 ## Source data and row structure
 
@@ -148,12 +154,12 @@ The loader selects products whose `countries_en` contains a US label and whose
 | Dataset | Row meaning | Current rows |
 |---|---|---:|
 | `us_openfoodfacts_nutri_nova_202407_202606.csv` | Products with a valid NOVA (1–4) or Nutri-Score (A–E) label | 208,036 |
-| `us_openfoodfacts_unlabeled_202407_202606.csv` | No valid target label, but ingredient or nutrient evidence exists | 55,861 |
-| Combined model population | Exact-deduplicated inputs, then latest row per nonblank code | 263,897 |
+| `us_openfoodfacts_unlabeled_202407_202606.csv` | No valid target label, but ingredient or nutrient evidence exists | 56,198 |
+| Combined model population | Exact-deduplicated inputs, then latest row per nonblank code | 264,234 |
 
 These are counts in the current local snapshot, not guaranteed future counts.
 Raw and full processed CSVs are ignored by Git. The tracked
-`sample_5000_us_food.csv` is only a development sample.
+`sample_5000_us_food.csv` is a tracked source-data sample refreshed by modeling.
 
 Data grain and keys:
 
@@ -166,7 +172,7 @@ Data grain and keys:
   `__missing_code_<row>` identifiers.
 - `nova_split` and `nutri_split` are separate target-specific assignments.
   Model matrices are imputed copies; source measurements remain unchanged.
-- Tableau output has one row per deduplicated `product_id`, 27 ordered fields,
+- Tableau output has one row per deduplicated `product_id`, 28 ordered fields,
   and excludes modeling-only intermediate fields.
 - Audit and score tables have row grain appropriate to their names (per input,
   feature, class/split, model, or product).
@@ -360,7 +366,7 @@ marker and reported additive count matches parsed tags. Nutrients are held
 constant. Results are model-input sensitivity analyses, not confirmed recipe
 changes or causal health effects.
 
-## Tableau export data dictionary (27 ordered columns)
+## Tableau export data dictionary (28 ordered columns)
 
 The workbook/export contract is `results/tables/tableau_products.csv`. Keep the
 column names and order in sync with `TABLEAU_EXPORT_COLUMNS` in
@@ -370,7 +376,7 @@ column names and order in sync with `TABLEAU_EXPORT_COLUMNS` in
 |---|---|---|
 | `code` | Text | Exact source product code, never converted to number. |
 | `product_name` | Text | Source name, or `Product <product_id>` if blank. |
-| `unified_category` | Text | Title-cased PNNS/category fallback, or `Miscellaneous`. |
+| `unified_category` | Text | Clean broad food group. PNNS group 1 is preferred; unknown groups use category/product text rules and otherwise become `Other / Unclassified`. |
 | `url` | Text | Product page URL. |
 | `nutriscore_provenance` | Text | Grade source; `hidden_final_test` marks suppressed test grade. |
 | `nutriscore_grade_final` | A–E/null | Selected grade display. |
@@ -385,13 +391,27 @@ column names and order in sync with `TABLEAU_EXPORT_COLUMNS` in
 | `nutri_sodium_penalty_pts` | Numeric/null | Dashboard proxy: `clip(sodium_100g / 0.09, 0, 10)`. |
 | `is_healthy_benchmark` | `Yes`/`No` | `Yes` if predicted NOVA ≤2 and displayed Nutri-Score is A or B. |
 | `has_other_additive` | 0/1/null | Positive count with none of the named categories detected; null if count missing. |
+| `sub_category` | Text | Detailed display group derived from PNNS group 2, OFF category labels, and product-name rules, constrained to its broad category. |
 
-The Tableau data contains the full labeled + unlabeled deduplicated population,
-not the old 2,500-row mock. `RUN_FINAL_TEST = False` suppresses test-split
+The Tableau data contains the full labeled + unlabeled deduplicated population;
+the tracked `sample_tableau_mock_data.csv` is a 5,000-row preview of this same
+export, not synthetic/mock data. `RUN_FINAL_TEST = False` suppresses test-split
 Nutri-Score grades and scores, but does not suppress model predictions.
 `shap_*_nova` are probability deltas and `nutri_*_penalty_pts` are dashboard
 proxies; neither should be described as official SHAP/official full-formula
 scores.
+
+`unified_category` keeps the workbook field name but consolidates detailed and
+noisy source labels into: Beverages, Grains & Bakery, Fruits & Vegetables,
+Dairy & Eggs, Meat & Seafood, Prepared Meals, Snacks & Sweets,
+Condiments & Cooking, Baby & Infant Foods, Alcoholic Beverages,
+Supplements & Nutrition, and Other / Unclassified. The new `sub_category`
+field retains detail such as Bread, Breakfast Cereals, Unsweetened Beverages,
+Processed Meat, and Chocolate. PNNS group 2 is preferred when it agrees with
+the broad category; otherwise OFF category labels and then product names are
+checked. Unmatched values are grouped as Other / Unclassified. These are
+display dimensions only; source category columns and model features are not
+rewritten.
 
 ## Installation, execution, and Tableau
 
@@ -415,16 +435,19 @@ python -m pytest -q
 ```
 
 The loader downloads the public gzip dump only if absent, then writes the
-labeled/unlabeled files and 5,000-row sample. The model command requires both
-full input files; it never substitutes the sample. Open
+labeled/unlabeled files and 5,000-row source sample. The model command requires
+both full input files; it never substitutes the sample. It refreshes both
+tracked samples after generating the full Tableau export. Open
 `src/Project Dashboard.twb` in Tableau after the model command has generated
 `results/tables/tableau_products.csv`.
 
-The workbook is a `.twb` XML workbook, not `.twd`. It was updated so both
-connections use the 27-column full Tableau export and `code` is text to
-preserve long identifiers. Its connection currently stores an absolute path
-for this workspace. If moved, use Tableau's **Data > [data source] > Edit
-Connection** and point to the new `results/tables/tableau_products.csv`.
+The workbook is a `.twb` XML workbook, not `.twd`. Both connections use the
+28-column full Tableau export and `code` is text to preserve long identifiers.
+The dashboard offers a single-value Category dropdown followed by a
+multi-select Sub Category checkbox dropdown with relevant values. Its
+connection currently stores an absolute path for this workspace. If moved,
+use Tableau's **Data > [data source] > Edit Connection** and point to the new
+`results/tables/tableau_products.csv`.
 
 If processed input files are missing, rerun the loader. If Python dependencies
 are missing, activate the project virtual environment and reinstall
