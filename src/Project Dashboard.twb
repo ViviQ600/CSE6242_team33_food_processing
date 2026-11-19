@@ -567,11 +567,17 @@
           <alias key='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:shap_sugars_nova:qk]&quot;' value='Sugar Contribution' />
           <alias key='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:sodium_100g:qk]&quot;' value='Sodium 100G' />
           <alias key='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:sugars_100g:qk]&quot;' value='Sugars 100G' />
-          <alias key='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:has_artificial_color:qk]&quot;' value='Artificial Color' />
-          <alias key='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:has_emulsifier:qk]&quot;' value='Emulsifier' />
-          <alias key='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:has_other_additive:qk]&quot;' value='Other Additives' />
-          <alias key='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:has_preservative:qk]&quot;' value='Preservative' />
-          <alias key='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:has_sweetener:qk]&quot;' value='Sweetener' />
+          <alias key='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:Factsheet_Artificial_Color_Status:qk]&quot;' value='Artificial Color' />
+          <alias key='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:Factsheet_Emulsifier_Status:qk]&quot;' value='Emulsifier' />
+          <alias key='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:Factsheet_Other_Additive_Status:qk]&quot;' value='Other Additive' />
+          <alias key='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:Factsheet_Preservative_Status:qk]&quot;' value='Preservative' />
+          <alias key='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:Factsheet_Sweetener_Status:qk]&quot;' value='Sweetener' />
+          <alias key='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:UPF_Artificial_Color_Rate:qk]&quot;' value='Artificial Color' />
+          <alias key='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:UPF_Preservative_Rate:qk]&quot;' value='Preservative' />
+          <alias key='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:UPF_Other_Additive_Rate:qk]&quot;' value='Other Additive' />
+          <alias key='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:UPF_Sweetener_Rate:qk]&quot;' value='Sweetener' />
+          <alias key='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:UPF_Emulsifier_Rate:qk]&quot;' value='Emulsifier' />
+          <alias key='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:UPF_Flavor_Enhancer_Rate:qk]&quot;' value='Flavor Enhancer' />
         </aliases>
       </column>
       <column caption='Dynamic NOVA 4 Prob' datatype='real' name='[Calculation_13039443473338374]' role='measure' type='quantitative'>
@@ -625,10 +631,10 @@
           <table-calc ordering-type='Rows' />
         </calculation>
       </column>
-      <column caption='Simulated_Sugar_100g' datatype='real' name='[Calculation_2603981053747203]' role='measure' type='quantitative'>
+      <column caption='Sugars (g/100 g)' datatype='real' name='[Calculation_2603981053747203]' role='measure' type='quantitative'>
         <calculation class='tableau' formula='ZN([sugars_100g]) * (1 - [Parameters].[Parameter 13039443461939200])' />
       </column>
-      <column caption='Simulated_Sodium_100g' datatype='real' name='[Calculation_2603981053870084]' role='measure' type='quantitative'>
+      <column caption='Sodium (g/100 g)' datatype='real' name='[Calculation_2603981053870084]' role='measure' type='quantitative'>
         <calculation class='tableau' formula='ZN([sodium_100g]) * (1 - [Parameters].[Parameter 13039443464347649])' />
       </column>
       <column datatype='real' default-format='n#,##0.0000;-#,##0.0000' name='[Multiple Values]' role='measure' type='quantitative' />
@@ -2574,10 +2580,10 @@
             <column caption='Dynamic Nutri-Score Grade' datatype='string' name='[Calculation_13039443474423817]' role='dimension' type='nominal'>
               <calculation class='tableau' formula='IF [Parameters].[Parameter 13039443461939200] = 0 AND [Parameters].[Parameter 13039443464347649] = 0 AND [Parameters].[Parameter 13039443466125314] = 0 AND [Parameters].[Parameter 13039443466584067] = FALSE AND [Parameters].[Parameter 13039443466829828] = FALSE AND [Parameters].[Param_Remove_Emulsifiers (copy)_13039443832381461] = FALSE AND [Parameters].[Param_Remove_Emulsifiers (copy)_13039443832819737] = FALSE AND [Parameters].[Param_Remove_Preservatives (copy)_13039443832676375] = FALSE THEN [nutriscore_grade_final] ELSEIF [Calculation_13039443474284552] &lt;= -1 THEN &quot;A&quot; ELSEIF [Calculation_13039443474284552] &lt;= 2 THEN &quot;B&quot; ELSEIF [Calculation_13039443474284552] &lt;= 10 THEN &quot;C&quot; ELSEIF [Calculation_13039443474284552] &lt;= 18 THEN &quot;D&quot; ELSE &quot;E&quot; END' />
             </column>
-            <column caption='Simulated_Sugar_100g' datatype='real' name='[Calculation_2603981053747203]' role='measure' type='quantitative'>
+            <column caption='Sugars (g/100 g)' datatype='real' name='[Calculation_2603981053747203]' role='measure' type='quantitative'>
               <calculation class='tableau' formula='ZN([sugars_100g]) * (1 - [Parameters].[Parameter 13039443461939200])' />
             </column>
-            <column caption='Simulated_Sodium_100g' datatype='real' name='[Calculation_2603981053870084]' role='measure' type='quantitative'>
+            <column caption='Sodium (g/100 g)' datatype='real' name='[Calculation_2603981053870084]' role='measure' type='quantitative'>
               <calculation class='tableau' formula='ZN([sodium_100g]) * (1 - [Parameters].[Parameter 13039443464347649])' />
             </column>
             <column caption='Additives N' datatype='real' name='[additives_n]' role='measure' type='quantitative' />
@@ -2632,8 +2638,10 @@
             <format attr='stroke-color' id='refline1' value='#9ca3af' />
           </style-rule>
           <style-rule element='axis'>
-            <encoding attr='space' class='0' field='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:Calculation_2603981053747203:qk]' field-type='quantitative' max='100' min='-2' range-type='fixed' scope='cols' type='space' />
-            <encoding attr='space' class='0' field='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:Calculation_2603981053870084:qk]' field-type='quantitative' max='5' min='-0.05' range-type='fixed' scope='rows' type='space' />
+            <encoding attr='space' class='0' field='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:Calculation_2603981053747203:qk]' field-type='quantitative' max='60' min='0' range-type='fixed' scope='cols' type='space' />
+            <encoding attr='space' class='0' field='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:Calculation_2603981053870084:qk]' field-type='quantitative' max='2.5' min='0' range-type='fixed' scope='rows' type='space' />
+            <format attr='title' field='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:Calculation_2603981053747203:qk]' scope='cols' value='Sugars (g/100 g)' />
+            <format attr='title' field='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:Calculation_2603981053870084:qk]' scope='rows' value='Sodium (g/100 g)' />
           </style-rule>
           <style-rule element='table'>
             <format attr='show-null-value-warning' value='false' />
@@ -2728,11 +2736,26 @@
             <column datatype='integer' name='[has_other_additive]' role='measure' type='quantitative' />
             <column datatype='integer' name='[has_preservative]' role='measure' type='quantitative' />
             <column caption='Has Sweetener' datatype='integer' name='[has_sweetener]' role='measure' type='quantitative' />
-            <column-instance column='[has_artificial_color]' derivation='Max' name='[max:has_artificial_color:qk]' pivot='key' type='quantitative' />
-            <column-instance column='[has_emulsifier]' derivation='Max' name='[max:has_emulsifier:qk]' pivot='key' type='quantitative' />
-            <column-instance column='[has_other_additive]' derivation='Max' name='[max:has_other_additive:qk]' pivot='key' type='quantitative' />
-            <column-instance column='[has_preservative]' derivation='Max' name='[max:has_preservative:qk]' pivot='key' type='quantitative' />
-            <column-instance column='[has_sweetener]' derivation='Max' name='[max:has_sweetener:qk]' pivot='key' type='quantitative' />
+            <column caption='Artificial Color' datatype='real' name='[Factsheet_Artificial_Color_Status]' role='measure' type='quantitative'>
+              <calculation class='tableau' formula='IF ZN([has_artificial_color]) &gt; 0 THEN 1 ELSE 0 END' />
+            </column>
+            <column caption='Emulsifier' datatype='real' name='[Factsheet_Emulsifier_Status]' role='measure' type='quantitative'>
+              <calculation class='tableau' formula='IF ZN([has_emulsifier]) &gt; 0 THEN 1 ELSE 0 END' />
+            </column>
+            <column caption='Other Additive' datatype='real' name='[Factsheet_Other_Additive_Status]' role='measure' type='quantitative'>
+              <calculation class='tableau' formula='IF ZN([has_other_additive]) &gt; 0 THEN 1 ELSE 0 END' />
+            </column>
+            <column caption='Preservative' datatype='real' name='[Factsheet_Preservative_Status]' role='measure' type='quantitative'>
+              <calculation class='tableau' formula='IF ZN([has_preservative]) &gt; 0 THEN 1 ELSE 0 END' />
+            </column>
+            <column caption='Sweetener' datatype='real' name='[Factsheet_Sweetener_Status]' role='measure' type='quantitative'>
+              <calculation class='tableau' formula='IF ZN([has_sweetener]) &gt; 0 THEN 1 ELSE 0 END' />
+            </column>
+            <column-instance column='[Factsheet_Artificial_Color_Status]' derivation='Max' name='[max:Factsheet_Artificial_Color_Status:qk]' pivot='key' type='quantitative' />
+            <column-instance column='[Factsheet_Emulsifier_Status]' derivation='Max' name='[max:Factsheet_Emulsifier_Status:qk]' pivot='key' type='quantitative' />
+            <column-instance column='[Factsheet_Other_Additive_Status]' derivation='Max' name='[max:Factsheet_Other_Additive_Status:qk]' pivot='key' type='quantitative' />
+            <column-instance column='[Factsheet_Preservative_Status]' derivation='Max' name='[max:Factsheet_Preservative_Status:qk]' pivot='key' type='quantitative' />
+            <column-instance column='[Factsheet_Sweetener_Status]' derivation='Max' name='[max:Factsheet_Sweetener_Status:qk]' pivot='key' type='quantitative' />
             <column-instance column='[product_name]' derivation='None' name='[none:product_name:nk]' pivot='key' type='nominal' />
             <column caption='Product Name' datatype='string' name='[product_name]' role='dimension' type='nominal' />
             <column caption='Proteins 100G' datatype='real' name='[proteins_100g]' role='measure' type='quantitative' />
@@ -2761,11 +2784,11 @@
               <groupfilter function='member' level='[:Measure Names]' member='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:fiber_100g:qk]&quot;' />
               <groupfilter function='member' level='[:Measure Names]' member='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:proteins_100g:qk]&quot;' />
               <groupfilter function='member' level='[:Measure Names]' member='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:additives_n:qk]&quot;' />
-              <groupfilter function='member' level='[:Measure Names]' member='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:has_emulsifier:qk]&quot;' />
-              <groupfilter function='member' level='[:Measure Names]' member='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:has_sweetener:qk]&quot;' />
-              <groupfilter function='member' level='[:Measure Names]' member='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:has_preservative:qk]&quot;' />
-              <groupfilter function='member' level='[:Measure Names]' member='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:has_artificial_color:qk]&quot;' />
-              <groupfilter function='member' level='[:Measure Names]' member='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:has_other_additive:qk]&quot;' /></groupfilter>
+              <groupfilter function='member' level='[:Measure Names]' member='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:Factsheet_Emulsifier_Status:qk]&quot;' />
+              <groupfilter function='member' level='[:Measure Names]' member='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:Factsheet_Sweetener_Status:qk]&quot;' />
+              <groupfilter function='member' level='[:Measure Names]' member='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:Factsheet_Preservative_Status:qk]&quot;' />
+              <groupfilter function='member' level='[:Measure Names]' member='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:Factsheet_Artificial_Color_Status:qk]&quot;' />
+              <groupfilter function='member' level='[:Measure Names]' member='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:Factsheet_Other_Additive_Status:qk]&quot;' /></groupfilter>
           </filter>
           <manual-sort column='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[:Measure Names]' direction='ASC'>
             <dictionary>
@@ -2775,9 +2798,11 @@
               <bucket>&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:fiber_100g:qk]&quot;</bucket>
               <bucket>&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:proteins_100g:qk]&quot;</bucket>
               <bucket>&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:additives_n:qk]&quot;</bucket>
-              <bucket>&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:has_emulsifier:qk]&quot;</bucket>
-              <bucket>&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:has_preservative:qk]&quot;</bucket>
-              <bucket>&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[sum:has_artificial_color:qk]&quot;</bucket>
+              <bucket>&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:Factsheet_Emulsifier_Status:qk]&quot;</bucket>
+              <bucket>&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:Factsheet_Sweetener_Status:qk]&quot;</bucket>
+              <bucket>&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:Factsheet_Preservative_Status:qk]&quot;</bucket>
+              <bucket>&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:Factsheet_Artificial_Color_Status:qk]&quot;</bucket>
+              <bucket>&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:Factsheet_Other_Additive_Status:qk]&quot;</bucket>
             </dictionary>
           </manual-sort>
           <filter class='categorical' column='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[none:product_name:nk]' filter-group='3'>
@@ -2799,12 +2824,12 @@
             <format attr='text-format' field='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:sodium_100g:qk]' value='n#,##0.00;-#,##0.00' />
             <format attr='text-format' field='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:sugars_100g:qk]' value='n#,##0.00;-#,##0.00' />
             <format attr='text-format' field='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:additives_n:qk]' value='n#,##0.00;-#,##0.00' />
-            <format attr='text-format' field='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:has_artificial_color:qk]' value='*&quot;Present&quot;;&quot;None&quot;,&quot;None&quot;' />
-            <format attr='text-format' field='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:has_emulsifier:qk]' value='*&quot;Present&quot;;&quot;None&quot;,&quot;None&quot;' />
-            <format attr='text-format' field='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:has_preservative:qk]' value='*&quot;Present&quot;;&quot;None&quot;,&quot;None&quot;' />
-            <format attr='text-format' field='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:has_sweetener:qk]' value='*&quot;Present&quot;;&quot;None&quot;,&quot;None&quot;' />
+            <format attr='text-format' field='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:Factsheet_Artificial_Color_Status:qk]' value='&quot;Y&quot;;&quot;N&quot;;&quot;N&quot;' />
+            <format attr='text-format' field='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:Factsheet_Emulsifier_Status:qk]' value='&quot;Y&quot;;&quot;N&quot;;&quot;N&quot;' />
+            <format attr='text-format' field='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:Factsheet_Preservative_Status:qk]' value='&quot;Y&quot;;&quot;N&quot;;&quot;N&quot;' />
+            <format attr='text-format' field='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:Factsheet_Sweetener_Status:qk]' value='&quot;Y&quot;;&quot;N&quot;;&quot;N&quot;' />
             <format attr='text-format' field='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:saturated-fat_100g:qk]' value='n#,##0.00;-#,##0.00' />
-            <format attr='text-format' field='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:has_other_additive:qk]' value='*&quot;Present&quot;;&quot;None&quot;,&quot;None&quot;' />
+            <format attr='text-format' field='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[max:Factsheet_Other_Additive_Status:qk]' value='&quot;Y&quot;;&quot;N&quot;;&quot;N&quot;' />
           </style-rule>
           <style-rule element='header'>
             <format attr='width' field='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[:Measure Names]' value='124' />
@@ -3034,18 +3059,36 @@
             <datasource caption='tableau_products' name='federated.1tjvipp1mqvyp916upkvw0hj7oht' />
           </datasources>
           <datasource-dependencies datasource='federated.1tjvipp1mqvyp916upkvw0hj7oht'>
-            <column-instance column='[has_artificial_color]' derivation='Avg' name='[avg:has_artificial_color:qk]' pivot='key' type='quantitative' />
-            <column-instance column='[has_emulsifier]' derivation='Avg' name='[avg:has_emulsifier:qk]' pivot='key' type='quantitative' />
-            <column-instance column='[has_flavor_enhancer]' derivation='Avg' name='[avg:has_flavor_enhancer:qk]' pivot='key' type='quantitative' />
-            <column-instance column='[has_other_additive]' derivation='Avg' name='[avg:has_other_additive:qk]' pivot='key' type='quantitative' />
-            <column-instance column='[has_preservative]' derivation='Avg' name='[avg:has_preservative:qk]' pivot='key' type='quantitative' />
-            <column-instance column='[has_sweetener]' derivation='Avg' name='[avg:has_sweetener:qk]' pivot='key' type='quantitative' />
+            <column-instance column='[UPF_Artificial_Color_Rate]' derivation='Avg' name='[avg:UPF_Artificial_Color_Rate:qk]' pivot='key' type='quantitative' />
+            <column-instance column='[UPF_Emulsifier_Rate]' derivation='Avg' name='[avg:UPF_Emulsifier_Rate:qk]' pivot='key' type='quantitative' />
+            <column-instance column='[UPF_Flavor_Enhancer_Rate]' derivation='Avg' name='[avg:UPF_Flavor_Enhancer_Rate:qk]' pivot='key' type='quantitative' />
+            <column-instance column='[UPF_Other_Additive_Rate]' derivation='Avg' name='[avg:UPF_Other_Additive_Rate:qk]' pivot='key' type='quantitative' />
+            <column-instance column='[UPF_Preservative_Rate]' derivation='Avg' name='[avg:UPF_Preservative_Rate:qk]' pivot='key' type='quantitative' />
+            <column-instance column='[UPF_Sweetener_Rate]' derivation='Avg' name='[avg:UPF_Sweetener_Rate:qk]' pivot='key' type='quantitative' />
             <column datatype='integer' name='[has_artificial_color]' role='measure' type='quantitative' />
             <column caption='Has Emulsifier' datatype='integer' name='[has_emulsifier]' role='measure' type='quantitative' />
             <column datatype='integer' name='[has_flavor_enhancer]' role='measure' type='quantitative' />
             <column datatype='integer' name='[has_other_additive]' role='measure' type='quantitative' />
             <column datatype='integer' name='[has_preservative]' role='measure' type='quantitative' />
             <column caption='Has Sweetener' datatype='integer' name='[has_sweetener]' role='measure' type='quantitative' />
+            <column caption='Artificial Color Detection Rate' datatype='real' name='[UPF_Artificial_Color_Rate]' role='measure' type='quantitative'>
+              <calculation class='tableau' formula='ZN([has_artificial_color])' />
+            </column>
+            <column caption='Emulsifier Detection Rate' datatype='real' name='[UPF_Emulsifier_Rate]' role='measure' type='quantitative'>
+              <calculation class='tableau' formula='ZN([has_emulsifier])' />
+            </column>
+            <column caption='Flavor Enhancer Detection Rate' datatype='real' name='[UPF_Flavor_Enhancer_Rate]' role='measure' type='quantitative'>
+              <calculation class='tableau' formula='ZN([has_flavor_enhancer])' />
+            </column>
+            <column caption='Other Additive Detection Rate' datatype='real' name='[UPF_Other_Additive_Rate]' role='measure' type='quantitative'>
+              <calculation class='tableau' formula='ZN([has_other_additive])' />
+            </column>
+            <column caption='Preservative Detection Rate' datatype='real' name='[UPF_Preservative_Rate]' role='measure' type='quantitative'>
+              <calculation class='tableau' formula='ZN([has_preservative])' />
+            </column>
+            <column caption='Sweetener Detection Rate' datatype='real' name='[UPF_Sweetener_Rate]' role='measure' type='quantitative'>
+              <calculation class='tableau' formula='ZN([has_sweetener])' />
+            </column>
           <column caption='Unified Category' datatype='string' name='[unified_category]' role='dimension' type='nominal' />
             <column-instance column='[unified_category]' derivation='None' name='[none:unified_category:nk]' pivot='key' type='nominal' />
             <column caption='Sub Category' datatype='string' name='[sub_category]' role='dimension' type='nominal' />
@@ -3060,22 +3103,22 @@
           </filter>
           <filter class='categorical' column='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[:Measure Names]'>
             <groupfilter function='union' user:op='manual'>
-              <groupfilter function='member' level='[:Measure Names]' member='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:has_emulsifier:qk]&quot;' />
-              <groupfilter function='member' level='[:Measure Names]' member='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:has_preservative:qk]&quot;' />
-              <groupfilter function='member' level='[:Measure Names]' member='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:has_sweetener:qk]&quot;' />
-              <groupfilter function='member' level='[:Measure Names]' member='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:has_artificial_color:qk]&quot;' />
-              <groupfilter function='member' level='[:Measure Names]' member='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:has_flavor_enhancer:qk]&quot;' />
-              <groupfilter function='member' level='[:Measure Names]' member='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:has_other_additive:qk]&quot;' />
+              <groupfilter function='member' level='[:Measure Names]' member='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:UPF_Emulsifier_Rate:qk]&quot;' />
+              <groupfilter function='member' level='[:Measure Names]' member='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:UPF_Preservative_Rate:qk]&quot;' />
+              <groupfilter function='member' level='[:Measure Names]' member='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:UPF_Sweetener_Rate:qk]&quot;' />
+              <groupfilter function='member' level='[:Measure Names]' member='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:UPF_Artificial_Color_Rate:qk]&quot;' />
+              <groupfilter function='member' level='[:Measure Names]' member='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:UPF_Flavor_Enhancer_Rate:qk]&quot;' />
+              <groupfilter function='member' level='[:Measure Names]' member='&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:UPF_Other_Additive_Rate:qk]&quot;' />
             </groupfilter>
           </filter>
           <manual-sort column='[federated.1tjvipp1mqvyp916upkvw0hj7oht].[:Measure Names]' direction='ASC'>
             <dictionary>
-              <bucket>&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:has_artificial_color:qk]&quot;</bucket>
-              <bucket>&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:has_preservative:qk]&quot;</bucket>
-              <bucket>&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:has_other_additive:qk]&quot;</bucket>
-              <bucket>&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:has_sweetener:qk]&quot;</bucket>
-              <bucket>&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:has_emulsifier:qk]&quot;</bucket>
-              <bucket>&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:has_flavor_enhancer:qk]&quot;</bucket>
+              <bucket>&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:UPF_Artificial_Color_Rate:qk]&quot;</bucket>
+              <bucket>&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:UPF_Preservative_Rate:qk]&quot;</bucket>
+              <bucket>&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:UPF_Other_Additive_Rate:qk]&quot;</bucket>
+              <bucket>&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:UPF_Sweetener_Rate:qk]&quot;</bucket>
+              <bucket>&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:UPF_Emulsifier_Rate:qk]&quot;</bucket>
+              <bucket>&quot;[federated.1tjvipp1mqvyp916upkvw0hj7oht].[avg:UPF_Flavor_Enhancer_Rate:qk]&quot;</bucket>
             </dictionary>
           </manual-sort>
           <slices>
