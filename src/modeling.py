@@ -1,4 +1,5 @@
 """Run the complete dataset workflow: python -m src.modeling."""
+import argparse
 from pathlib import Path
 import sys
 if __name__ == "__main__" and not __package__:
@@ -15,7 +16,16 @@ from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier, HistGradientBoostingClassifier
 from sklearn.dummy import DummyClassifier
-from sklearn.metrics import accuracy_score, f1_score, average_precision_score, brier_score_loss, precision_score, recall_score, mean_absolute_error
+from sklearn.metrics import (
+    accuracy_score,
+    average_precision_score,
+    brier_score_loss,
+    f1_score,
+    mean_absolute_error,
+    precision_recall_curve,
+    precision_score,
+    recall_score,
+)
 from sklearn.inspection import permutation_importance
 from threadpoolctl import threadpool_limits
 from .data_processing import clean_data
@@ -23,17 +33,24 @@ from .analysis import (field, normalize, load_processed_data, engineer_features,
                        assign_splits, select_nutrients, exploratory_analysis,
                        INGREDIENT_FEATURES, MARKERS, parse_tags, ingredient_features)
 from .utils import CORE_NUTRIENTS, save_table
-from .visualization import plot_model_results, export_tableau
+from .visualization import (
+    calibrate_additive_weights,
+    export_tableau,
+    plot_model_results,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = PROJECT_ROOT / "data" / "processed"
 OUTPUT_DIR = PROJECT_ROOT / "results"
 SEED = 33
-RUN_FINAL_TEST = False  # Set True only after methods and settings are frozen.
 
 
-def make_pipeline(name, nutrients, include_ingredients=True):
-    numeric = (INGREDIENT_FEATURES if include_ingredients else []) + list(nutrients)
+def make_pipeline(
+    name, nutrients, include_ingredients=True, ingredient_columns=None
+):
+    if ingredient_columns is None:
+        ingredient_columns = INGREDIENT_FEATURES if include_ingredients else []
+    numeric = list(ingredient_columns) + list(nutrients)
     preparation = ColumnTransformer([
         ("numeric", Pipeline([
             ("impute", SimpleImputer(strategy="median", add_indicator=True, keep_empty_features=True)),
@@ -63,6 +80,101 @@ def nova_metrics(model, frame):
         "nova4_average_precision": average_precision_score(truth.eq(4), p4),
         "nova4_brier": brier_score_loss(truth.eq(4), p4),
     }
+
+
+def optimal_nova4_threshold(model, validation):
+    """Choose the NOVA-4 probability cutoff maximizing validation-set F1."""
+    truth = validation.nova_target.astype(int).eq(4)
+    class_index = list(model.classes_).index(4)
+    probability = model.predict_proba(validation)[:, class_index]
+    precision, recall, thresholds = precision_recall_curve(truth, probability)
+    if not len(thresholds):
+        raise ValueError("Validation data does not support a NOVA 4 threshold.")
+    f1 = (
+        2 * precision[:-1] * recall[:-1]
+        / np.maximum(precision[:-1] + recall[:-1], np.finfo(float).eps)
+    )
+    best = int(np.argmax(f1))
+    return float(thresholds[best])
+
+
+def thresholded_nova_predictions(model, frame, threshold):
+    """Apply a calibrated NOVA-4 cutoff while retaining the other class argmax."""
+    classes = np.asarray(model.classes_)
+    probabilities = model.predict_proba(frame)
+    nova4_column = int(np.flatnonzero(classes == 4)[0])
+    predictions = classes[probabilities.argmax(axis=1)].copy()
+    is_nova4 = probabilities[:, nova4_column] >= threshold
+    predictions[is_nova4] = 4
+    below_threshold = ~is_nova4 & (predictions == 4)
+    if below_threshold.any():
+        other_columns = np.flatnonzero(classes != 4)
+        predictions[below_threshold] = classes[
+            other_columns[
+                probabilities[below_threshold][:, other_columns].argmax(axis=1)
+            ]
+        ]
+    return predictions
+
+
+def final_test_metrics(model, frame, threshold):
+    """Export per-class metrics and calibrated NOVA-4 probability metrics."""
+    truth = frame.nova_target.astype(int)
+    prediction = thresholded_nova_predictions(model, frame, threshold)
+    class_rows = []
+    for label in [1, 2, 3, 4]:
+        actual = truth.eq(label)
+        predicted = prediction == label
+        class_rows.extend(
+            [
+                {
+                    "metric": "precision",
+                    "class": label,
+                    "value": precision_score(actual, predicted, zero_division=0),
+                },
+                {
+                    "metric": "recall",
+                    "class": label,
+                    "value": recall_score(actual, predicted, zero_division=0),
+                },
+                {
+                    "metric": "f1",
+                    "class": label,
+                    "value": f1_score(actual, predicted, zero_division=0),
+                },
+            ]
+        )
+    class_rows.extend(
+        [
+            {
+                "metric": "macro_f1",
+                "class": "all",
+                "value": f1_score(
+                    truth, prediction, labels=[1, 2, 3, 4],
+                    average="macro", zero_division=0,
+                ),
+            },
+            {
+                "metric": "nova4_average_precision",
+                "class": 4,
+                "value": average_precision_score(
+                    truth.eq(4),
+                    model.predict_proba(frame)[:, list(model.classes_).index(4)],
+                ),
+            },
+            {
+                "metric": "nova4_brier",
+                "class": 4,
+                "value": brier_score_loss(
+                    truth.eq(4),
+                    model.predict_proba(frame)[:, list(model.classes_).index(4)],
+                ),
+            },
+        ]
+    )
+    metrics = pd.DataFrame(class_rows)
+    metrics["nova4_threshold"] = threshold
+    return metrics
 
 
 def train_nova(train, validation, nutrients, output_dir):
@@ -221,7 +333,7 @@ def grade_metrics(truth, prediction):
     }
 
 
-def complete_nutriscore(df, output_dir):
+def complete_nutriscore(df, output_dir, run_final_test=False):
     """Observed grade -> supported 2023 formula -> classifier -> unknown."""
     formulas = formula_grades(df)
     # A text label alone is not sufficient for this nutrition-completion model.
@@ -240,7 +352,7 @@ def complete_nutriscore(df, output_dir):
         if len(part):
             rows.append({"split": "validation", "coverage": label, "rows": len(part),
                          **grade_metrics(part.nutri_target, model.predict(part))})
-    if RUN_FINAL_TEST:
+    if run_final_test:
         test = df.loc[df.nutri_target.notna() & supported & df.nutri_split.eq("test")]
         rows.append({"split": "test", "coverage": "all_supported", "rows": len(test),
                      **grade_metrics(test.nutri_target, model.predict(test))})
@@ -275,17 +387,26 @@ def complete_nutriscore(df, output_dir):
 
 
 def ingredient_scenarios(model, validation, output_dir):
-    """Evaluate single-marker removals on all NOVA 4 validation products.
+    """Evaluate supported single and paired additive removals on NOVA 4 products.
 
     These are model-input sensitivity tests, not verified recipe changes.
     Nutrients remain fixed; no post-change Nutri-Score is claimed.
     """
     import re
+
     candidates = validation.loc[validation.nova_target.eq(4) & ~validation.needs_review]
     if candidates.empty:
         raise ValueError("No NOVA 4 validation products for scenarios.")
     p4_index = list(model.classes_).index(4)
     baseline = pd.Series(model.predict_proba(candidates)[:, p4_index], index=candidates.index)
+    scenario_markers = {
+        "sucralose": ["sucralose"],
+        "carrageenan": ["carrageenan"],
+        "lecithin": ["lecithin"],
+        "sucralose_lecithin": ["sucralose", "lecithin"],
+        "carrageenan_lecithin": ["carrageenan", "lecithin"],
+        "sucralose_carrageenan": ["sucralose", "carrageenan"],
+    }
     altered_rows, records, audits = [], [], []
     for index, row in candidates.iterrows():
         tags = parse_tags(row.additives_tags)
@@ -293,24 +414,49 @@ def ingredient_scenarios(model, validation, output_dir):
         if pd.isna(count) or count != len(tags):
             audits.append({"product_id": row.product_id, "status": "inconsistent_additive_evidence"})
             continue
-        eligible = False
-        for marker in ["sucralose", "carrageenan", "lecithin"]:
-            pattern, codes = MARKERS[marker]
-            # Require matching text and a matching additive tag before changing count.
-            if not re.search(pattern, row.ingredients_text_norm) or not (tags & codes):
+        supported = {}
+        for marker, (pattern, codes) in MARKERS.items():
+            if marker not in {"sucralose", "carrageenan", "lecithin"}:
+                continue
+            matched_codes = tags & codes
+            if re.search(pattern, row.ingredients_text_norm) and matched_codes:
+                supported[marker] = (pattern, matched_codes)
+
+        eligible_scenarios = 0
+        for scenario, markers in scenario_markers.items():
+            if not all(marker in supported for marker in markers):
                 continue
             altered = row.copy()
-            altered["ingredients_text_norm"] = re.sub(r"\s+", " ", re.sub(pattern, " ", row.ingredients_text_norm)).strip()
-            remaining = tags - codes
+            ingredient_text = row.ingredients_text_norm
+            removed_codes = set()
+            for marker in markers:
+                pattern, codes = supported[marker]
+                ingredient_text = re.sub(pattern, " ", ingredient_text)
+                removed_codes.update(codes)
+            altered["ingredients_text_norm"] = re.sub(
+                r"\s+", " ", ingredient_text
+            ).strip()
+            remaining = tags - removed_codes
             altered["additives_tags"] = ",".join("en:" + tag for tag in sorted(remaining))
             altered["additives_n"] = len(remaining)
             altered_rows.append(altered)
-            records.append({"product_id": row.product_id, "scenario_id": "remove_" + marker,
-                            "baseline_NOVA4_probability": baseline.loc[index],
-                            "nutrition_assumption": "held_constant_not_measured",
-                            "interpretation": "model_sensitivity_only"})
-            eligible = True
-        audits.append({"product_id": row.product_id, "status": "eligible" if eligible else "no_supported_marker"})
+            records.append(
+                {
+                    "product_id": row.product_id,
+                    "scenario_id": "remove_" + "_".join(markers),
+                    "baseline_NOVA4_probability": baseline.loc[index],
+                    "nutrition_assumption": "held_constant_not_measured",
+                    "interpretation": "model_sensitivity_only",
+                }
+            )
+            eligible_scenarios += 1
+        audits.append(
+            {
+                "product_id": row.product_id,
+                "status": "eligible" if eligible_scenarios else "no_supported_marker",
+                "eligible_scenarios": eligible_scenarios,
+            }
+        )
     columns = ["product_id", "scenario_id", "baseline_NOVA4_probability", "nutrition_assumption", "interpretation"]
     result = pd.DataFrame(records, columns=columns)
     result["scenario_NOVA4_probability"] = np.nan
@@ -327,7 +473,16 @@ def ingredient_scenarios(model, validation, output_dir):
     return result
 
 
-def main():
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Run the food processing model pipeline.")
+    parser.add_argument(
+        "--run-final-test",
+        action="store_true",
+        default=False,
+        help="Evaluate the frozen test split after validation settings are fixed.",
+    )
+    run_final_test = parser.parse_args(argv).run_final_test
+
     for folder in ["tables", "figures", "models"]:
         (OUTPUT_DIR / folder).mkdir(parents=True, exist_ok=True)
     # 1. Read both complete files. No sample file is used.
@@ -378,6 +533,50 @@ def main():
         ablations.append({"feature_set": name, "model": best_name, **nova_metrics(candidate, validation)})
     save_table(pd.DataFrame(ablations), OUTPUT_DIR, "nova_feature_comparison.csv")
 
+    # Quantify validation performance after removing increasingly direct features.
+    marker_features = [
+        feature for feature in INGREDIENT_FEATURES
+        if feature.startswith("marker_")
+    ]
+    feature_sets = [
+        ("full_features", INGREDIENT_FEATURES),
+        (
+            "without_markers",
+            [feature for feature in INGREDIENT_FEATURES
+             if feature not in marker_features],
+        ),
+        (
+            "without_markers_or_additives_count",
+            [feature for feature in INGREDIENT_FEATURES
+             if feature not in marker_features
+             and feature != "additives_n_feature"],
+        ),
+        ("nutrients_only", []),
+    ]
+    leakage_rows = []
+    for label, ingredient_columns in feature_sets:
+        candidate = (
+            model
+            if label == "full_features"
+            else make_pipeline(
+                best_name,
+                nutrients,
+                ingredient_columns=ingredient_columns,
+            )
+        )
+        if candidate is not model:
+            candidate.fit(train, train.nova_target.astype(int))
+        leakage_rows.append(
+            {
+                "feature_set": label,
+                "model": best_name,
+                **nova_metrics(candidate, validation),
+            }
+        )
+    save_table(
+        pd.DataFrame(leakage_rows), OUTPUT_DIR, "e2_leakage_ablation.csv"
+    )
+
     # 7. Use all validation products for global permutation importance.
     features = INGREDIENT_FEATURES + nutrients + ["category"]
     importance = permutation_importance(model, validation[features], validation.nova_target.astype(int), scoring="f1_macro", n_repeats=5, random_state=SEED, n_jobs=1)
@@ -385,21 +584,47 @@ def main():
     save_table(importance_table.sort_values("macro_f1_drop", ascending=False), OUTPUT_DIR, "feature_importance.csv")
 
     # 8. Complete nutritional grades without overwriting valid observed grades.
-    grades = complete_nutriscore(df, OUTPUT_DIR)
+    grades = complete_nutriscore(df, OUTPUT_DIR, run_final_test)
 
     # 9. Evaluate predefined single-marker sensitivity scenarios.
     scenarios = ingredient_scenarios(model, validation, OUTPUT_DIR)
 
     # 10. Evaluate test data only after freezing methods and settings.
-    if RUN_FINAL_TEST:
-        save_table(pd.DataFrame([{"model": best_name, **nova_metrics(model, test)}]), OUTPUT_DIR, "nova_final_test.csv")
+    threshold = optimal_nova4_threshold(model, validation)
+    calibrated_weights = calibrate_additive_weights(model, validation)
+    calibrated_weights = pd.concat(
+        [
+            calibrated_weights,
+            pd.DataFrame(
+                [
+                    {
+                        "parameter": "nova4_threshold",
+                        "weight": threshold,
+                        "eligible_products": len(validation),
+                    }
+                ]
+            ),
+        ],
+        ignore_index=True,
+    )
+    save_table(
+        calibrated_weights, OUTPUT_DIR, "calibrated_sandbox_weights.csv"
+    )
+
+    if run_final_test:
+        save_table(
+            final_test_metrics(model, test, threshold),
+            OUTPUT_DIR,
+            "nova_final_test.csv",
+        )
     else:
         (OUTPUT_DIR / "tables/nova_final_test.csv").unlink(missing_ok=True)
         print("Final tests have not been run. Test labels are hidden from Tableau exports.")
 
     # 11. Export model predictions, original nutrition, scenarios, and provenance.
     tableau = export_tableau(
-        df, model, best_name, grades, scenarios, importance_table, OUTPUT_DIR, RUN_FINAL_TEST
+        df, model, best_name, grades, scenarios, importance_table, OUTPUT_DIR,
+        run_final_test,
     )
     raw_sample = pd.read_csv(
         DATA_DIR / "us_openfoodfacts_nutri_nova_202407_202606.csv",

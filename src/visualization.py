@@ -35,6 +35,7 @@ TABLEAU_EXPORT_COLUMNS = [
     "has_flavor_enhancer",
     "has_other_additive",
     "sub_category",
+    "shap_satfat_nova",
 ]
 
 
@@ -115,20 +116,7 @@ def _legacy_sensitivity_fields(model, df, base_probability):
     from .analysis import INGREDIENT_FEATURES
 
     results = pd.DataFrame(index=df.index)
-    for nutrient, output_name in [
-        ("sugars_100g", "shap_sugars_nova"),
-        ("sodium_100g", "shap_sodium_nova"),
-    ]:
-        usable = df[nutrient].notna()
-        results[output_name] = np.nan
-        if usable.any():
-            changed = df.loc[usable].copy()
-            changed[nutrient] = 0
-            results.loc[usable, output_name] = (
-                base_probability[usable]
-                - _probability_for_class(model, changed, 4)
-            )
-
+    results[["shap_sugars_nova", "shap_sodium_nova", "shap_satfat_nova"]] = np.nan
     results["shap_additives_nova"] = np.nan
     marker_columns = [
         feature for feature in INGREDIENT_FEATURES if feature.startswith("marker_")
@@ -139,6 +127,7 @@ def _legacy_sensitivity_fields(model, df, base_probability):
     masks = {
         "shap_sugars_nova": df["sugars_100g"].notna(),
         "shap_sodium_nova": df["sodium_100g"].notna(),
+        "shap_satfat_nova": df["saturated-fat_100g"].notna(),
         "shap_additives_nova": additive_evidence,
     }
 
@@ -152,6 +141,12 @@ def _legacy_sensitivity_fields(model, df, base_probability):
     for output_name, column, mask, mutate in [
         ("shap_sugars_nova", "sugars_100g", masks["shap_sugars_nova"], zero_nutrient),
         ("shap_sodium_nova", "sodium_100g", masks["shap_sodium_nova"], zero_nutrient),
+        (
+            "shap_satfat_nova",
+            "saturated-fat_100g",
+            masks["shap_satfat_nova"],
+            zero_nutrient,
+        ),
         (
             "shap_additives_nova",
             "additives_n_feature",
@@ -176,6 +171,59 @@ def _legacy_sensitivity_fields(model, df, base_probability):
             positions, results.columns.get_loc(output_name)
         ] = deltas
     return results
+
+
+def calibrate_additive_weights(model, validation):
+    """Estimate per-class NOVA-4 probability drops on eligible validation rows."""
+    from .analysis import MARKERS
+
+    classes = {
+        "emulsifier": ["lecithin", "carrageenan", "polysorbate80", "xanthan", "guar"],
+        "sweetener": ["sucralose", "aspartame", "acesulfame", "saccharin"],
+        "preservative": ["benzoate", "sorbate", "nitrite"],
+        "flavor_enhancer": ["msg"],
+        "artificial_color": ["artificial_color"],
+    }
+    candidates = validation.loc[validation.nova_target.eq(4)]
+    if candidates.empty:
+        raise ValueError("No NOVA 4 validation products for additive calibration.")
+
+    base_probability = _probability_for_class(model, candidates, 4)
+    additive_count = pd.to_numeric(
+        candidates["additives_n_feature"], errors="coerce"
+    )
+    rows = []
+    for label, marker_names in classes.items():
+        marker_columns = [
+            "marker_" + name
+            for name in marker_names
+            if "marker_" + name in candidates.columns
+        ]
+        if not marker_columns:
+            raise ValueError(f"No marker features available for additive class {label}.")
+        has_class = candidates[marker_columns].eq(1).any(axis=1)
+        eligible = has_class & additive_count.gt(0)
+        positions = np.flatnonzero(eligible.to_numpy())
+        if len(positions):
+            changes = candidates.iloc[positions].copy()
+            changes.loc[:, marker_columns] = 0
+            changes["additives_n_feature"] = np.clip(
+                additive_count.iloc[positions].to_numpy() - 1, a_min=0, a_max=None
+            )
+            drops = base_probability[positions] - _probability_for_class(
+                model, changes, 4
+            )
+            weight = float(np.mean(drops))
+        else:
+            weight = 0.0
+        rows.append(
+            {
+                "parameter": label + "_weight",
+                "weight": weight,
+                "eligible_products": int(len(positions)),
+            }
+        )
+    return pd.DataFrame(rows)
 
 
 def export_tableau(
@@ -283,11 +331,30 @@ def export_tableau(
     sodium = output["sodium_100g"]
     output["nutri_sugar_penalty_pts"] = (sugar / 4.5).clip(0, 10)
     output["nutri_sodium_penalty_pts"] = (sodium / 0.09).clip(0, 10)
-    output["is_healthy_benchmark"] = np.where(
-        output.pred_nova_group.le(2) & output.nutriscore_grade_final.isin(["A", "B"]),
-        "Yes",
-        "No",
+    benchmark_candidates = (
+        output.pred_nova_group.le(2)
+        & output.nutriscore_grade_final.isin(["A", "B"])
     )
+    candidate_positions = np.flatnonzero(benchmark_candidates.to_numpy())
+    candidate_keys = pd.DataFrame(
+        {
+            "unified_category": output["unified_category"].to_numpy()[
+                candidate_positions
+            ],
+            "product_name": (
+                output["product_name"]
+                .astype("string")
+                .str.lower()
+                .str.strip()
+                .to_numpy()[candidate_positions]
+            ),
+        }
+    )
+    duplicate_candidates = candidate_keys.duplicated(keep="first").to_numpy()
+    benchmark_candidates.iloc[
+        candidate_positions[duplicate_candidates]
+    ] = False
+    output["is_healthy_benchmark"] = np.where(benchmark_candidates, "Yes", "No")
 
     tableau = output[TABLEAU_EXPORT_COLUMNS]
     if len(tableau) != len(df) or tableau.columns.tolist() != TABLEAU_EXPORT_COLUMNS:

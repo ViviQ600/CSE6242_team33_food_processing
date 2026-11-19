@@ -19,6 +19,21 @@ model workflow:
 python -m src.modeling
 ```
 
+For the final report, run the held-out NOVA test evaluation only after model
+selection and validation settings are frozen:
+
+```powershell
+python -m src.modeling --run-final-test
+```
+
+The model workflow also writes additive calibration, E2 leakage ablation, and
+ingredient-removal scenario results under `results/tables/`. To run the E5
+scalability timings at 10k, 50k, 100k, and full-data sizes:
+
+```powershell
+python -m src.benchmark
+```
+
 To download/refresh the Open Food Facts source and regenerate both processed
 datasets first (about 1.3 GB compressed raw input in the current snapshot):
 

@@ -8,13 +8,21 @@ from src.analysis import (
     tableau_category,
     tableau_categories,
 )
-from src.visualization import TABLEAU_EXPORT_COLUMNS, export_tableau
+from src.visualization import (
+    TABLEAU_EXPORT_COLUMNS,
+    _legacy_sensitivity_fields,
+    export_tableau,
+)
 
 
 class ProbabilityModel:
     classes_ = np.array([1, 2, 3, 4])
 
+    def __init__(self):
+        self.probability_calls = 0
+
     def predict_proba(self, frame):
+        self.probability_calls += 1
         sugar = pd.to_numeric(frame["sugars_100g"], errors="coerce").fillna(0)
         additives = pd.to_numeric(
             frame["additives_n_feature"], errors="coerce"
@@ -107,36 +115,51 @@ def test_tableau_category_collapses_taxonomy_and_recovers_unknown_groups():
 def test_tableau_export_keeps_workbook_schema_and_hides_test_grade(tmp_path):
     frame = pd.DataFrame(
         {
-            "product_id": ["1", "2"],
-            "code": ["100110296241329314942455330", "2"],
-            "product_name": ["Product one", None],
-            "url": ["https://example.test/1", "https://example.test/2"],
-            "category": ["snacks", "unknown"],
-            "pnns_groups_1": ["Sugary snacks", "unknown"],
-            "pnns_groups_2": ["unknown", "unknown"],
-            "categories_en": ["snacks", "3-In-1-Coffee"],
-            "ingredients_text_norm": ["sugar", "sucralose"],
-            "ingredients_text": ["sugar", "sucralose"],
-            "additives_tags": [None, "en:e955"],
-            "additives_en": [None, "E955 - Sucralose"],
-            "additives_n": [0, 1],
-            "nutriscore_score": [4, 8],
-            "nutri_split": ["test", "inference"],
-            "sugars_100g": [25.0, 10.0],
-            "sodium_100g": [0.2, 0.1],
-            "saturated-fat_100g": [1.0, 2.0],
-            "fiber_100g": [2.0, 1.0],
-            "proteins_100g": [3.0, 4.0],
+            "product_id": ["1", "2", "3", "4"],
+            "code": ["100110296241329314942455330", "2", "3", "4"],
+            "product_name": ["Product one", None, " PRODUCT ONE ", "product one"],
+            "url": [
+                "https://example.test/1",
+                "https://example.test/2",
+                "https://example.test/3",
+                "https://example.test/4",
+            ],
+            "category": ["snacks", "unknown", "snacks", "snacks"],
+            "pnns_groups_1": [
+                "Sugary snacks",
+                "unknown",
+                "Sugary snacks",
+                "Sugary snacks",
+            ],
+            "pnns_groups_2": ["unknown", "unknown", "unknown", "unknown"],
+            "categories_en": ["snacks", "3-In-1-Coffee", "snacks", "snacks"],
+            "ingredients_text_norm": ["sugar", "sucralose", "sugar", "sugar"],
+            "ingredients_text": ["sugar", "sucralose", "sugar", "sugar"],
+            "additives_tags": [None, "en:e955", None, None],
+            "additives_en": [None, "E955 - Sucralose", None, None],
+            "additives_n": [0, 1, 0, 0],
+            "nutriscore_score": [4, 8, 4, 4],
+            "nutri_split": ["test", "inference", "inference", "inference"],
+            "sugars_100g": [25.0, 10.0, 25.0, 25.0],
+            "sodium_100g": [0.2, 0.1, 0.2, 0.2],
+            "saturated-fat_100g": [1.0, 2.0, 1.0, 1.0],
+            "fiber_100g": [2.0, 1.0, 2.0, 2.0],
+            "proteins_100g": [3.0, 4.0, 3.0, 3.0],
         }
     )
     frame[INGREDIENT_FEATURES] = ingredient_features(frame)
     grades = pd.DataFrame(
         {
-            "product_id": ["1", "2"],
-            "grade_display": ["B", "D"],
-            "grade_source": ["OFF_observed", "OFF_observed"],
-            "nutri_split": ["test", "inference"],
-            "formula_score_2023": [np.nan, np.nan],
+            "product_id": ["1", "2", "3", "4"],
+            "grade_display": ["B", "D", "B", "B"],
+            "grade_source": [
+                "OFF_observed",
+                "OFF_observed",
+                "OFF_observed",
+                "OFF_observed",
+            ],
+            "nutri_split": ["test", "inference", "inference", "inference"],
+            "formula_score_2023": [np.nan, np.nan, np.nan, np.nan],
         }
     )
 
@@ -151,12 +174,41 @@ def test_tableau_export_keeps_workbook_schema_and_hides_test_grade(tmp_path):
         run_final_test=False,
     )
 
+    assert len(TABLEAU_EXPORT_COLUMNS) == 29
     assert exported.columns.tolist() == TABLEAU_EXPORT_COLUMNS
     assert "sub_category" in exported.columns
     assert exported.sub_category.notna().all()
-    assert len(exported) == 2
-    assert exported.code.tolist() == ["100110296241329314942455330", "2"]
+    assert len(exported) == 4
+    assert exported.code.tolist() == ["100110296241329314942455330", "2", "3", "4"]
+    assert exported.is_healthy_benchmark.tolist() == ["No", "No", "Yes", "No"]
+    healthy = exported.loc[exported.is_healthy_benchmark.eq("Yes")]
+    healthy_names = healthy.product_name.str.lower().str.strip()
+    assert not pd.DataFrame(
+        {"category": healthy.unified_category, "name": healthy_names}
+    ).duplicated().any()
     assert pd.isna(exported.loc[0, "nutriscore_grade_final"])
     assert exported.loc[0, "nutriscore_provenance"] == "hidden_final_test"
     assert exported.loc[1, "nutriscore_grade_final"] == "D"
     assert (tmp_path / "tables" / "tableau_products.csv").is_file()
+
+
+def test_sensitivity_fields_batch_each_nutrient_once_and_include_satfat():
+    model = ProbabilityModel()
+    frame = pd.DataFrame(
+        {
+            "sugars_100g": [10.0, 20.0],
+            "sodium_100g": [0.2, 0.4],
+            "saturated-fat_100g": [1.0, 2.0],
+            "additives_n_feature": [1.0, 2.0],
+            **{feature: [0.0, 1.0] for feature in INGREDIENT_FEATURES
+               if feature.startswith("marker_")},
+        }
+    )
+    base_probability = model.predict_proba(frame)[:, 3]
+    model.probability_calls = 0
+
+    fields = _legacy_sensitivity_fields(model, frame, base_probability)
+
+    assert model.probability_calls == 4
+    assert np.isfinite(fields["shap_satfat_nova"]).all()
+    assert "shap_satfat_nova" in TABLEAU_EXPORT_COLUMNS
