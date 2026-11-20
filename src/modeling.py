@@ -62,7 +62,16 @@ def make_pipeline(
         "majority": DummyClassifier(strategy="most_frequent"),
         "logistic": LogisticRegression(max_iter=1000, class_weight="balanced", random_state=SEED),
         "random_forest": RandomForestClassifier(n_estimators=120, max_depth=18, min_samples_leaf=5, class_weight="balanced_subsample", random_state=SEED, n_jobs=2),
-        "gradient_boosting": HistGradientBoostingClassifier(max_iter=120, max_leaf_nodes=15, learning_rate=0.08, class_weight="balanced", early_stopping=False, random_state=SEED),
+        "gradient_boosting": HistGradientBoostingClassifier(
+            max_iter=500,
+            max_leaf_nodes=63,
+            learning_rate=0.08,
+            min_samples_leaf=20,
+            l2_regularization=1.0,
+            class_weight="balanced",
+            early_stopping=False,
+            random_state=SEED,
+        ),
     }
     return Pipeline([("preprocess", preparation), ("model", models[name])])
 
@@ -83,18 +92,22 @@ def nova_metrics(model, frame):
 
 
 def optimal_nova4_threshold(model, validation):
-    """Choose the NOVA-4 probability cutoff maximizing validation-set F1."""
+    """Choose a validation-set F1-optimal cutoff without inverting status bands."""
     truth = validation.nova_target.astype(int).eq(4)
     class_index = list(model.classes_).index(4)
     probability = model.predict_proba(validation)[:, class_index]
     precision, recall, thresholds = precision_recall_curve(truth, probability)
-    if not len(thresholds):
-        raise ValueError("Validation data does not support a NOVA 4 threshold.")
+    eligible = thresholds >= 0.45
+    if not eligible.any():
+        raise ValueError(
+            "Validation data has no NOVA 4 threshold at or above 0.45."
+        )
     f1 = (
         2 * precision[:-1] * recall[:-1]
         / np.maximum(precision[:-1] + recall[:-1], np.finfo(float).eps)
     )
-    best = int(np.argmax(f1))
+    eligible_indices = np.flatnonzero(eligible)
+    best = eligible_indices[int(np.argmax(f1[eligible]))]
     return float(thresholds[best])
 
 
@@ -117,11 +130,18 @@ def thresholded_nova_predictions(model, frame, threshold):
     return predictions
 
 
-def final_test_metrics(model, frame, threshold):
+def final_test_metrics(model, frame, threshold, model_name=None):
     """Export per-class metrics and calibrated NOVA-4 probability metrics."""
     truth = frame.nova_target.astype(int)
     prediction = thresholded_nova_predictions(model, frame, threshold)
     class_rows = []
+    class_rows.append(
+        {
+            "metric": "accuracy",
+            "class": "all",
+            "value": accuracy_score(truth, prediction),
+        }
+    )
     for label in [1, 2, 3, 4]:
         actual = truth.eq(label)
         predicted = prediction == label
@@ -174,6 +194,7 @@ def final_test_metrics(model, frame, threshold):
     )
     metrics = pd.DataFrame(class_rows)
     metrics["nova4_threshold"] = threshold
+    metrics["model"] = model_name or "selected"
     return metrics
 
 
@@ -188,7 +209,7 @@ def train_nova(train, validation, nutrients, output_dir):
     comparison = pd.DataFrame(rows).sort_values("macro_f1", ascending=False)
     best_name = comparison.loc[comparison.model.ne("majority"), "model"].iloc[0]
     save_table(comparison, output_dir, "nova_validation_metrics.csv")
-    return models[best_name], best_name, comparison
+    return models[best_name], best_name, comparison, models
 
 
 def ns_points(value, thresholds, inclusive=False):
@@ -356,6 +377,11 @@ def complete_nutriscore(df, output_dir, run_final_test=False):
         test = df.loc[df.nutri_target.notna() & supported & df.nutri_split.eq("test")]
         rows.append({"split": "test", "coverage": "all_supported", "rows": len(test),
                      **grade_metrics(test.nutri_target, model.predict(test))})
+        for label, lower, upper in [("4-5 nutrients", 4, 5), ("6-7 nutrients", 6, 7)]:
+            part = test.loc[test.observed_core_nutrients.between(lower, upper)]
+            if len(part):
+                rows.append({"split": "test", "coverage": label, "rows": len(part),
+                             **grade_metrics(part.nutri_target, model.predict(part))})
     save_table(pd.DataFrame(rows), output_dir, "nutriscore_metrics.csv")
     joblib.dump(model, Path(output_dir) / "models/nutriscore_model.joblib")
 
@@ -468,7 +494,28 @@ def ingredient_scenarios(model, validation, output_dir):
         result["scenario_NOVA4_probability"] = model.predict_proba(altered)[:, p4_index]
     result["probability_change"] = result.scenario_NOVA4_probability - result.baseline_NOVA4_probability
     result["lower_prediction"] = result.probability_change.lt(-1e-8)
-    save_table(pd.DataFrame(audits), output_dir, "scenario_eligibility.csv")
+    eligibility = pd.DataFrame(audits)
+    scenario_counts = result.groupby("scenario_id").product_id.nunique()
+    summary_rows = []
+    for scenario in scenario_markers:
+        eligible_products = int(scenario_counts.get("remove_" + scenario, 0))
+        summary_rows.append(
+            {
+                "product_id": "",
+                "status": (
+                    "eligible"
+                    if eligible_products
+                    else "zero_eligible_cooccurrences"
+                ),
+                "eligible_scenarios": eligible_products,
+                "scenario_id": "remove_" + scenario,
+            }
+        )
+    eligibility["scenario_id"] = pd.NA
+    eligibility = pd.concat(
+        [eligibility, pd.DataFrame(summary_rows)], ignore_index=True
+    )
+    save_table(eligibility, output_dir, "scenario_eligibility.csv")
     save_table(result, output_dir, "ingredient_scenarios.csv")
     return result
 
@@ -515,7 +562,9 @@ def main(argv=None):
     exploratory_analysis(train, validation, OUTPUT_DIR)
 
     # 5. Select a structured model by validation macro-F1.
-    model, best_name, comparison = train_nova(train, validation, nutrients, OUTPUT_DIR)
+    model, best_name, comparison, trained_models = train_nova(
+        train, validation, nutrients, OUTPUT_DIR
+    )
     joblib.dump(model, OUTPUT_DIR / "models/nova_model.joblib")
     plot_model_results(model, validation, comparison, OUTPUT_DIR)
 
@@ -612,11 +661,16 @@ def main(argv=None):
     )
 
     if run_final_test:
-        save_table(
-            final_test_metrics(model, test, threshold),
-            OUTPUT_DIR,
-            "nova_final_test.csv",
+        test_metrics = pd.concat(
+            [
+                final_test_metrics(
+                    candidate, test, threshold, model_name=name
+                )
+                for name, candidate in trained_models.items()
+            ],
+            ignore_index=True,
         )
+        save_table(test_metrics, OUTPUT_DIR, "nova_final_test.csv")
     else:
         (OUTPUT_DIR / "tables/nova_final_test.csv").unlink(missing_ok=True)
         print("Final tests have not been run. Test labels are hidden from Tableau exports.")
