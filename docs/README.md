@@ -72,6 +72,10 @@ Run commands from the repository root in PowerShell.
    If both full processed CSVs already exist, this is the only required
    pipeline command. The sample files are not substitutes.
    The command also refreshes the source sample and a 5,000-row Tableau preview.
+   After model selection and validation settings are frozen, add
+   `--run-final-test` to evaluate the held-out NOVA test split. Run
+   `python -m src.benchmark` separately for E5 timing results at 10k, 50k,
+   100k, and full-data sizes.
 4. **Open the Tableau workbook**:
 
    ```text
@@ -126,7 +130,10 @@ Connection** (or reconnect the data source) and select the new
 | `nutriscore_metrics.csv` | Nutri-Score classifier validation metrics by nutrient coverage. |
 | `nutriscore_completion.csv`, `nutriscore_completion_counts.csv` | Product-level grade/source/rule result and source counts. |
 | `scenario_eligibility.csv`, `ingredient_scenarios.csv` | Supported ingredient marker scenarios and probability changes. |
-| `nova_final_test.csv` | Created only when `RUN_FINAL_TEST = True`; otherwise removed. |
+| `calibrated_sandbox_weights.csv` | Validation-calibrated additive weights and the NOVA 4 PR-optimal threshold. |
+| `e2_leakage_ablation.csv` | Validation macro-F1 with progressively reduced rule/marker features. |
+| `nova_final_test.csv` | Per-class precision/recall/F1, macro-F1, NOVA 4 AP, and Brier score; created only with `--run-final-test`. |
+| `e5_scalability_benchmark.csv` | Feature engineering, training, and Tableau-export runtimes by sample size. |
 
 ### Figures (`results/figures/`)
 
@@ -386,7 +393,7 @@ column names and order in sync with `TABLEAU_EXPORT_COLUMNS` in
 | `sugars_100g`, `sodium_100g`, `saturated-fat_100g`, `fiber_100g`, `proteins_100g` | Numeric g/100 g | Original measurement; missing values remain missing. |
 | `additives_n` | Numeric/null | Validated additive count used by model. |
 | `has_emulsifier`, `has_sweetener`, `has_preservative`, `has_artificial_color`, `has_flavor_enhancer` | 0/1/null | Evidence-based ingredient/tag/additive-name flags. Null means evidence is insufficient. |
-| `shap_sugars_nova`, `shap_sodium_nova`, `shap_additives_nova` | Numeric/null | Legacy-compatible names for local NOVA-4 probability changes when a feature signal is set to zero. Not SHAP values. |
+| `shap_sugars_nova`, `shap_sodium_nova`, `shap_satfat_nova`, `shap_additives_nova` | Numeric/null | Legacy-compatible names for local NOVA-4 probability changes when a feature signal is set to zero. Not SHAP values. |
 | `nutri_sugar_penalty_pts` | Numeric/null | Dashboard proxy: `clip(sugars_100g / 4.5, 0, 10)`. |
 | `nutri_sodium_penalty_pts` | Numeric/null | Dashboard proxy: `clip(sodium_100g / 0.09, 0, 10)`. |
 | `is_healthy_benchmark` | `Yes`/`No` | `Yes` if predicted NOVA ≤2 and displayed Nutri-Score is A or B. |
@@ -395,8 +402,9 @@ column names and order in sync with `TABLEAU_EXPORT_COLUMNS` in
 
 The Tableau data contains the full labeled + unlabeled deduplicated population;
 the tracked `sample_tableau_mock_data.csv` is a 5,000-row preview of this same
-export, not synthetic/mock data. `RUN_FINAL_TEST = False` suppresses test-split
-Nutri-Score grades and scores, but does not suppress model predictions.
+export, not synthetic/mock data. The default modeling command suppresses
+test-split Nutri-Score grades and scores; `--run-final-test` reveals them only
+after final evaluation. Neither setting suppresses model predictions.
 `shap_*_nova` are probability deltas and `nutri_*_penalty_pts` are dashboard
 proxies; neither should be described as official SHAP/official full-formula
 scores.

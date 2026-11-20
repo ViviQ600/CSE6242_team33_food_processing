@@ -33,6 +33,11 @@ MARKERS = {
     "sorbate": (r"\b(?:potassium[-\s]+sorbate|e\s*-?\s*202)\b", {"e202"}),
     "nitrite": (r"\b(?:sodium[-\s]+nitrite|e\s*-?\s*250)\b", {"e250"}),
     "msg": (r"\b(?:monosodium[-\s]+glutamate|e\s*-?\s*621)\b", {"e621"}),
+    "artificial_color": (
+        r"\b(?:tartrazine|allura red|sunset yellow|brilliant blue|caramel color|"
+        r"e\s*-?\s*(?:102|110|129|133|150d))\b",
+        {"e102", "e110", "e129", "e133", "e150d"},
+    ),
     "maltodextrin": (r"\bmaltodextrin\b", set()),
 }
 TABLEAU_ADDITIVE_MARKERS = {
